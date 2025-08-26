@@ -50,7 +50,6 @@ logs/
 test_storage/
 test_files/
 *.test
-test_*
 
 # Storage and data directories (fiver-specific)
 .fiver/

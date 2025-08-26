@@ -5,7 +5,7 @@ CFLAGS = -Wall -Wextra -std=c99 -O2 -g
 LDFLAGS =
 
 # Source files
-SOURCES = fiver.c
+SOURCES = fiver.c storage_system.c delta_algorithm.c rolling_hash.c hash_table.c
 TARGET = fiver
 
 # Default target
@@ -27,21 +27,10 @@ install: $(TARGET)
 uninstall:
 	rm -f /usr/local/bin/$(TARGET)
 
-# Run tests (placeholder for now)
+# Run automated tests
 test: $(TARGET)
-	@echo "Running CLI tests..."
-	@echo "Testing help..."
-	./$(TARGET) --help
-	@echo "Testing version..."
-	./$(TARGET) --version
-	@echo "Testing unknown command..."
-	./$(TARGET) unknown-command || true
-	@echo "Testing command help..."
-	./$(TARGET) track --help
-	@echo "Testing placeholder commands..."
-	./$(TARGET) track test.txt
-	./$(TARGET) list
-	@echo "All tests completed!"
+	@echo "Running automated tests..."
+	./test_track_command.sh
 
 # Development target with debug info
 debug: CFLAGS += -DDEBUG -g3

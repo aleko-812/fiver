@@ -29,7 +29,7 @@ StorageConfig* storage_init(const char* storage_dir) {
         strcpy(config->storage_dir, "./blob_diff_storage");
     }
 
-    config->max_versions = 10;
+    config->max_versions = 100;
     config->compression_enabled = 0;  // Disabled for now
 
     // Create storage directory if it doesn't exist

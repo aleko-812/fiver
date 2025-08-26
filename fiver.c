@@ -4,6 +4,8 @@
 #include <unistd.h>
 #include <getopt.h>
 #include <stdarg.h>
+#include <sys/stat.h>
+#include "delta_structures.h"
 
 // Version information
 #define FIVER_VERSION "1.0.0"
@@ -273,8 +275,107 @@ int cmd_track(int argc, char *argv[]) {
         print_info("Tracking file: %s", filename);
     }
 
-    // TODO: Implement actual tracking logic
-    print_success("Tracked %s (placeholder implementation)", filename);
+    // Check if file exists
+    if (access(filename, F_OK) != 0) {
+        print_error("File does not exist: %s", filename);
+        return 1;
+    }
+
+    // Check if file is readable
+    if (access(filename, R_OK) != 0) {
+        print_error("File is not readable: %s", filename);
+        return 1;
+    }
+
+    // Check if it's a regular file
+    struct stat st;
+    if (stat(filename, &st) != 0) {
+        print_error("Cannot access file: %s", filename);
+        return 1;
+    }
+
+    if (!S_ISREG(st.st_mode)) {
+        print_error("Not a regular file: %s", filename);
+        return 1;
+    }
+
+    // Initialize storage
+    StorageConfig* config = storage_init("./fiver_storage");
+    if (config == NULL) {
+        print_error("Failed to initialize storage");
+        return 1;
+    }
+
+    if (verbose_flag) {
+        print_info("Storage initialized: %s", config->storage_dir);
+    }
+
+    // Read the file data
+    FILE* file = fopen(filename, "rb");
+    if (file == NULL) {
+        print_error("Cannot open file: %s", filename);
+        storage_free(config);
+        return 1;
+    }
+
+    // Get file size
+    fseek(file, 0, SEEK_END);
+    long file_size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    if (file_size < 0) {
+        print_error("Cannot determine file size: %s", filename);
+        fclose(file);
+        storage_free(config);
+        return 1;
+    }
+
+    if (file_size == 0) {
+        print_error("Cannot track empty file: %s", filename);
+        fclose(file);
+        storage_free(config);
+        return 1;
+    }
+
+    // Allocate buffer and read file
+    uint8_t* file_data = malloc(file_size);
+    if (file_data == NULL) {
+        print_error("Out of memory");
+        fclose(file);
+        storage_free(config);
+        return 1;
+    }
+
+    size_t bytes_read = fread(file_data, 1, file_size, file);
+    fclose(file);
+
+    if (bytes_read != (size_t)file_size) {
+        print_error("Failed to read file: %s", filename);
+        free(file_data);
+        storage_free(config);
+        return 1;
+    }
+
+    if (verbose_flag) {
+        print_info("Read %zu bytes from %s", bytes_read, filename);
+    }
+
+    // Track the file version
+    int result = track_file_version(config, filename, file_data, file_size);
+
+    // Clean up file data
+    free(file_data);
+
+    if (result < 0) {
+        print_error("Failed to track file: %s", filename);
+        storage_free(config);
+        return 1;
+    }
+
+    // Clean up storage config
+    storage_free(config);
+
+    print_success("Tracked %s (%zu bytes)", filename, bytes_read);
     return 0;
 }
 
