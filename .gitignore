@@ -1,0 +1,122 @@
+# Build artifacts
+*.o
+*.obj
+*.exe
+*.out
+*.app
+fiver
+*.so
+*.dylib
+*.dll
+*.a
+*.lib
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.#*
+\#*#
+
+# IDE and editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.vim/
+*.vim
+.DS_Store
+Thumbs.db
+
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
+
+# Log files
+*.log
+logs/
+
+# Test files and directories
+test_storage/
+test_files/
+*.test
+test_*
+
+# Storage and data directories (fiver-specific)
+.fiver/
+fiver_storage/
+storage/
+*.delta
+*.metadata
+
+# Documentation build
+docs/_build/
+docs/build/
+
+# Package files
+*.tar.gz
+*.zip
+*.rar
+*.7z
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Compiler specific
+*.gch
+*.pch
+
+# Profiling and coverage
+*.gcov
+*.gcda
+*.gcno
+*.prof
+*.out
+
+# Valgrind
+valgrind-out.txt
+
+# CMake (if used later)
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile.cmake
+CMakeScripts/
+
+# Dependencies (if added later)
+vendor/
+deps/
+third_party/
+
+# Configuration files with sensitive data
+config.h
+config.local.h
+*.conf.local
+
+# Core dumps
+core
+core.*
+*.core
+
+# Memory dumps
+*.dump
+
+# Temporary directories
+tmp/
+temp/
