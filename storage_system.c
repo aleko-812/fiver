@@ -234,7 +234,7 @@ DeltaInfo* load_delta(StorageConfig* config, const char* filename, uint32_t vers
     }
 
     delta->original_size = metadata.original_size;
-    delta->new_size = 0;  // Will be calculated when applying delta
+    delta->new_size = 0;  // Will be calculated from operations
     delta->operation_count = metadata.operation_count;
     delta->delta_size = metadata.delta_size;
 
@@ -312,6 +312,24 @@ DeltaInfo* load_delta(StorageConfig* config, const char* filename, uint32_t vers
     }
 
     fclose(delta_file);
+
+    // Calculate the new_size from operations
+    uint32_t calculated_new_size = 0;
+    for (uint32_t i = 0; i < delta->operation_count; i++) {
+        DeltaOperation* op = &delta->operations[i];
+        switch (op->type) {
+            case DELTA_COPY:
+                calculated_new_size += op->length;
+                break;
+            case DELTA_INSERT:
+                calculated_new_size += op->length;
+                break;
+            case DELTA_REPLACE:
+                calculated_new_size += op->length;
+                break;
+        }
+    }
+    delta->new_size = calculated_new_size;
 
     printf("Loaded delta version %u for '%s' (%u operations, %u bytes)\n",
            version, filename, delta->operation_count, delta->delta_size);

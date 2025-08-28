@@ -87,7 +87,7 @@ check_file_exists() {
 # Function to cleanup test files
 cleanup() {
     echo -e "${YELLOW}Cleaning up test files...${NC}"
-    rm -f test_file.txt empty_file.txt test_binary.bin large_test_file.bin file1.txt file2.txt "test file with spaces.txt" message_test.txt list1.txt list2.txt status_test.txt
+    rm -f test_file.txt empty_file.txt test_binary.bin large_test_file.bin file1.txt file2.txt "test file with spaces.txt" message_test.txt list1.txt list2.txt status_test.txt delta_test1.txt delta_test2.txt
     rm -rf fiver_storage
     echo "Cleanup complete"
     echo ""
@@ -345,6 +345,37 @@ run_test_with_output "Status json" "./fiver status status_test.txt --json" 0 "\"
 
 # Test 54: Status unknown option
 run_test_with_output "Status unknown option" "./fiver status status_test.txt --bogus" 1 "Unknown option"
+
+# Delta algorithm fixes tests
+# Test 55: Verify new_size calculation for first version
+echo "First version content" > delta_test1.txt
+run_test_with_output "Track first version" "./fiver track delta_test1.txt" 0 "Tracked delta_test1.txt"
+run_test_with_output "Diff first version new_size" "./fiver diff delta_test1.txt" 0 "New size: 22 bytes"
+
+# Test 56: Verify new_size calculation for second version
+echo "Second version with more content" > delta_test1.txt
+run_test_with_output "Track second version" "./fiver track delta_test1.txt" 0 "Tracked delta_test1.txt"
+run_test_with_output "Diff second version new_size" "./fiver diff delta_test1.txt --version 2" 0 "New size: 33 bytes"
+
+# Test 57: Verify new_size calculation for third version with different content
+echo "Completely different content for third version" > delta_test1.txt
+run_test_with_output "Track third version" "./fiver track delta_test1.txt" 0 "Tracked delta_test1.txt"
+run_test_with_output "Diff third version new_size" "./fiver diff delta_test1.txt --version 3" 0 "New size: 47 bytes"
+
+# Test 58: Verify compression ratio calculation is accurate
+run_test_with_output "Compression ratio accuracy" "./fiver diff delta_test1.txt --version 3" 0 "Compression ratio:"
+
+# Test 59: Verify delta operations are correct
+run_test_with_output "Delta operations structure" "./fiver diff delta_test1.txt --version 3" 0 "Operations:"
+
+# Test 60: Verify multiple files with different sizes
+echo "Small file" > delta_test2.txt
+run_test_with_output "Track small file" "./fiver track delta_test2.txt" 0 "Tracked delta_test2.txt"
+run_test_with_output "Small file new_size" "./fiver diff delta_test2.txt" 0 "New size: 11 bytes"
+
+echo "This is a much larger file with significantly more content to test delta compression" > delta_test2.txt
+run_test_with_output "Track large file update" "./fiver track delta_test2.txt" 0 "Tracked delta_test2.txt"
+run_test_with_output "Large file new_size" "./fiver diff delta_test2.txt --version 2" 0 "New size: 85 bytes"
 
 # Test 26: Track with message flag
 echo "test content" > message_test.txt

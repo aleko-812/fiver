@@ -187,7 +187,7 @@ DeltaInfo* create_delta_operations(const uint8_t* original_data, uint32_t origin
     if (delta == NULL) return NULL;
 
     delta->original_size = original_size;
-    delta->new_size = new_size;
+    delta->new_size = 0;  // Will be calculated from operations
     delta->operation_count = 0;
     delta->operations = NULL;
     delta->delta_size = 0;
@@ -339,6 +339,24 @@ DeltaInfo* create_delta_operations(const uint8_t* original_data, uint32_t origin
         delta->operation_count++;
         delta->delta_size += insert_length;
     }
+
+    // Calculate the final new_size from operations
+    uint32_t calculated_new_size = 0;
+    for (uint32_t i = 0; i < delta->operation_count; i++) {
+        DeltaOperation* op = &delta->operations[i];
+        switch (op->type) {
+            case DELTA_COPY:
+                calculated_new_size += op->length;
+                break;
+            case DELTA_INSERT:
+                calculated_new_size += op->length;
+                break;
+            case DELTA_REPLACE:
+                calculated_new_size += op->length;
+                break;
+        }
+    }
+    delta->new_size = calculated_new_size;
 
     return delta;
 }
