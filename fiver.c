@@ -5,6 +5,7 @@
 #include <getopt.h>
 #include <stdarg.h>
 #include <sys/stat.h>
+#include <time.h>
 #include "delta_structures.h"
 
 // Version information
@@ -520,12 +521,112 @@ int cmd_history(int argc, char *argv[]) {
     }
 
     const char *filename = argv[0];
+
+    // Options: --format <fmt>, --limit <N>
+    const char *format = "table"; // table | json | brief
+    int limit = 0; // 0 => no limit
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--format") == 0) {
+            if (i + 1 >= argc) { print_error("--format requires a value"); return 1; }
+            format = argv[i + 1];
+            i++;
+        } else if (strcmp(argv[i], "--limit") == 0) {
+            if (i + 1 >= argc) { print_error("--limit requires a value"); return 1; }
+            long v = strtol(argv[i + 1], NULL, 10);
+            if (v < 0) { print_error("Invalid limit: %s", argv[i + 1]); return 1; }
+            limit = (int)v;
+            i++;
+        } else {
+            print_error("Unknown option: %s", argv[i]);
+            return 1;
+        }
+    }
+
     if (verbose_flag) {
         print_info("Showing history for file: %s", filename);
     }
 
-    // TODO: Implement actual history logic
-    print_info("History for %s (placeholder implementation)", filename);
+    // Initialize storage
+    StorageConfig* config = storage_init("./fiver_storage");
+    if (config == NULL) {
+        print_error("Failed to initialize storage");
+        return 1;
+    }
+
+    // Get versions
+    uint32_t versions[512];
+    int count = get_file_versions(config, filename, versions, 512);
+    if (count <= 0) {
+        print_error("No versions found for: %s", filename);
+        storage_free(config);
+        return 1;
+    }
+
+    // Sort ascending for consistency
+    for (int i = 0; i < count - 1; i++) {
+        for (int j = i + 1; j < count; j++) {
+            if (versions[j] < versions[i]) {
+                uint32_t tmp = versions[i]; versions[i] = versions[j]; versions[j] = tmp;
+            }
+        }
+    }
+
+    int start_index = 0;
+    if (limit > 0 && limit < count) {
+        start_index = count - limit; // show last <limit> entries
+    }
+
+    if (strcmp(format, "json") == 0) {
+        printf("{\n  \"file\": \"%s\",\n  \"versions\": [\n", filename);
+        int first = 1;
+        for (int idx = start_index; idx < count; idx++) {
+            uint32_t v = versions[idx];
+            // Read metadata
+            char metadata_filename[512];
+            snprintf(metadata_filename, sizeof(metadata_filename), "%s/%s_v%u.meta", config->storage_dir, filename, v);
+            FILE* meta_file = fopen(metadata_filename, "rb");
+            FileMetadata meta; memset(&meta, 0, sizeof(meta));
+            if (meta_file) { fread(&meta, sizeof(FileMetadata), 1, meta_file); fclose(meta_file); }
+            if (!first) printf(",\n"); first = 0;
+            printf("    { \"version\": %u, \"operations\": %u, \"delta_size\": %u, \"timestamp\": %ld, \"message\": \"%s\" }",
+                   v, meta.operation_count, meta.delta_size, (long)meta.timestamp, meta.message);
+        }
+        printf("\n  ]\n}\n");
+    } else if (strcmp(format, "brief") == 0) {
+        for (int idx = start_index; idx < count; idx++) {
+            uint32_t v = versions[idx];
+            char metadata_filename[512];
+            snprintf(metadata_filename, sizeof(metadata_filename), "%s/%s_v%u.meta", config->storage_dir, filename, v);
+            FILE* meta_file = fopen(metadata_filename, "rb");
+            FileMetadata meta; memset(&meta, 0, sizeof(meta));
+            if (meta_file) { fread(&meta, sizeof(FileMetadata), 1, meta_file); fclose(meta_file); }
+            printf("v%u: %u ops, delta %u bytes%s%s\n", v, meta.operation_count, meta.delta_size,
+                   meta.message[0] ? ", msg: " : "",
+                   meta.message[0] ? meta.message : "");
+        }
+    } else { // table
+        printf("History for %s:\n", filename);
+        printf("Version  Timestamp            Ops  Delta  Message\n");
+        printf("-------  -------------------  ----  -----  -------\n");
+        char timebuf[64];
+        for (int idx = start_index; idx < count; idx++) {
+            uint32_t v = versions[idx];
+            char metadata_filename[512];
+            snprintf(metadata_filename, sizeof(metadata_filename), "%s/%s_v%u.meta", config->storage_dir, filename, v);
+            FILE* meta_file = fopen(metadata_filename, "rb");
+            FileMetadata meta; memset(&meta, 0, sizeof(meta));
+            if (meta_file) { fread(&meta, sizeof(FileMetadata), 1, meta_file); fclose(meta_file); }
+            struct tm *tm_info = localtime(&meta.timestamp);
+            if (tm_info) {
+                strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", tm_info);
+            } else {
+                strcpy(timebuf, "-");
+            }
+            printf("%-7u  %-19s  %-4u  %-5u  %s\n", v, timebuf, meta.operation_count, meta.delta_size, meta.message);
+        }
+    }
+
+    storage_free(config);
     return 0;
 }
 

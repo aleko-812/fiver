@@ -263,6 +263,39 @@ run_test_with_output "Diff invalid version" "./fiver diff diff_test.txt --versio
 # Test 34: Diff unknown option
 run_test_with_output "Diff unknown option" "./fiver diff diff_test.txt --bogus" 1 "Unknown option"
 
+# History command tests
+# Test 35: History help
+run_test_with_output "History help" "./fiver history --help" 0 "Usage: fiver history"
+
+# Test 36: History missing file
+run_test_with_output "History missing file" "./fiver history" 1 "missing file argument"
+
+# Test 37: History no versions
+run_test_with_output "History no versions" "./fiver history untracked_hist.txt" 1 "No versions found"
+
+# Prepare versions with messages
+echo "h1" > hist.txt
+run_test_with_output "Track hist v1" "./fiver track hist.txt --message 'first'" 0 "Tracked hist.txt"
+echo "h2" > hist.txt
+run_test_with_output "Track hist v2" "./fiver track hist.txt --message 'second'" 0 "Tracked hist.txt"
+echo "h3" > hist.txt
+run_test_with_output "Track hist v3" "./fiver track hist.txt --message 'third'" 0 "Tracked hist.txt"
+
+# Test 38: History table default
+run_test_with_output "History table" "./fiver history hist.txt" 0 "History for hist.txt"
+
+# Test 39: History brief format
+run_test_with_output "History brief" "./fiver history hist.txt --format brief" 0 "v1:"
+
+# Test 40: History json format
+run_test_with_output "History json" "./fiver history hist.txt --format json" 0 "\"versions\""
+
+# Test 41: History limit
+run_test_with_output "History limit 2" "./fiver history hist.txt --limit 2" 0 "Version"
+
+# Test 42: History unknown option
+run_test_with_output "History unknown option" "./fiver history hist.txt --bogus" 1 "Unknown option"
+
 # Test 26: Track with message flag
 echo "test content" > message_test.txt
 run_test_with_output "Track with message" "./fiver track message_test.txt --message 'Test message'" 0 "Tracked message_test.txt"
