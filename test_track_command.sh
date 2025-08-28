@@ -225,6 +225,44 @@ run_test_with_output "Invalid option" "./fiver --invalid-option" 1 "Unknown comm
 # Test 25: Version flag
 run_test_with_output "Version flag" "./fiver --version" 0 "fiver 1.0.0"
 
+# Diff command tests
+# Test 26: Diff help
+run_test_with_output "Diff help" "./fiver diff --help" 0 "Usage: fiver diff"
+
+# Test 27: Diff missing file argument
+run_test_with_output "Diff missing file" "./fiver diff" 1 "missing file argument"
+
+# Test 28: Diff on untracked file (no versions)
+run_test_with_output "Diff no versions" "./fiver diff untracked.txt" 1 "No versions found"
+
+# Prepare tracked file for diff tests
+echo "Hello, fiver!" > diff_test.txt
+run_test_with_output "Track for diff" "./fiver track diff_test.txt" 0 "Tracked diff_test.txt"
+
+# Test 29: Diff default output
+run_test_with_output "Diff default" "./fiver diff diff_test.txt" 0 "Diff for diff_test.txt"
+
+# Test 30: Diff brief output
+run_test_with_output "Diff brief" "./fiver diff diff_test.txt --brief" 0 "ops, delta"
+
+# Test 31: Diff JSON output
+run_test_with_output "Diff json" "./fiver diff diff_test.txt --json" 0 "\"file\""
+
+# Create additional versions
+echo "Hello, fiver!!" > diff_test.txt
+run_test_with_output "Track v2 for diff" "./fiver track diff_test.txt" 0 "Tracked diff_test.txt"
+echo "Hello, fiver!!!" > diff_test.txt
+run_test_with_output "Track v3 for diff" "./fiver track diff_test.txt" 0 "Tracked diff_test.txt"
+
+# Test 32: Diff specific version
+run_test_with_output "Diff version 2" "./fiver diff diff_test.txt --version 2" 0 "version 2"
+
+# Test 33: Diff invalid version value
+run_test_with_output "Diff invalid version" "./fiver diff diff_test.txt --version 0" 1 "Invalid version"
+
+# Test 34: Diff unknown option
+run_test_with_output "Diff unknown option" "./fiver diff diff_test.txt --bogus" 1 "Unknown option"
+
 # Test 26: Track with message flag
 echo "test content" > message_test.txt
 run_test_with_output "Track with message" "./fiver track message_test.txt --message 'Test message'" 0 "Tracked message_test.txt"
@@ -247,7 +285,7 @@ echo -e "${YELLOW}==========================================${NC}"
 echo -e "${YELLOW}  STORAGE VERIFICATION TESTS${NC}"
 echo -e "${YELLOW}==========================================${NC}"
 
-# Test 31: Verify storage structure
+# Test 40: Verify storage structure
 echo -e "${BLUE}Checking storage directory structure...${NC}"
 if [ -d "fiver_storage" ]; then
     echo "Storage directory contents:"

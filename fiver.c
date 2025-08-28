@@ -405,12 +405,93 @@ int cmd_diff(int argc, char *argv[]) {
     }
 
     const char *filename = argv[0];
-    if (verbose_flag) {
-        print_info("Showing diff for file: %s", filename);
+
+    // Parse options: --version/-v, --json, --brief
+    uint32_t target_version = 0; // 0 => latest
+    int json_flag_local = 0;
+    int brief_flag_local = 0;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-v") == 0) {
+            if (i + 1 >= argc) {
+                print_error("--version requires a value");
+                return 1;
+            }
+            long v = strtol(argv[i + 1], NULL, 10);
+            if (v <= 0) {
+                print_error("Invalid version: %s", argv[i + 1]);
+                return 1;
+            }
+            target_version = (uint32_t)v;
+            i++;
+        } else if (strcmp(argv[i], "--json") == 0) {
+            json_flag_local = 1;
+        } else if (strcmp(argv[i], "--brief") == 0) {
+            brief_flag_local = 1;
+        } else {
+            print_error("Unknown option: %s", argv[i]);
+            return 1;
+        }
     }
 
-    // TODO: Implement actual diff logic
-    print_info("Diff for %s (placeholder implementation)", filename);
+    if (verbose_flag) {
+        if (target_version > 0) {
+            print_info("Showing diff for %s (version %u)", filename, target_version);
+        } else {
+            print_info("Showing diff for %s (latest)", filename);
+        }
+    }
+
+    // Initialize storage
+    StorageConfig* config = storage_init("./fiver_storage");
+    if (config == NULL) {
+        print_error("Failed to initialize storage");
+        return 1;
+    }
+
+    // Resolve latest version if needed
+    if (target_version == 0) {
+        uint32_t versions[256];
+        int count = get_file_versions(config, filename, versions, 256);
+        if (count <= 0) {
+            print_error("No versions found for: %s", filename);
+            storage_free(config);
+            return 1;
+        }
+        uint32_t max_v = versions[0];
+        for (int i = 1; i < count; i++) {
+            if (versions[i] > max_v) max_v = versions[i];
+        }
+        target_version = max_v;
+    }
+
+    // Load delta
+    DeltaInfo* delta = load_delta(config, filename, target_version);
+    if (delta == NULL) {
+        print_error("Failed to load delta for %s (version %u)", filename, target_version);
+        storage_free(config);
+        return 1;
+    }
+
+    // Output
+    if (json_flag_local) {
+        // Minimal JSON summary
+        printf("{\n");
+        printf("  \"file\": \"%s\",\n", filename);
+        printf("  \"version\": %u,\n", target_version);
+        printf("  \"original_size\": %u,\n", delta->original_size);
+        printf("  \"delta_size\": %u,\n", delta->delta_size);
+        printf("  \"operation_count\": %u\n", delta->operation_count);
+        printf("}\n");
+    } else if (brief_flag_local) {
+        printf("%s v%u: %u ops, delta %u bytes (orig %u)\n",
+               filename, target_version, delta->operation_count, delta->delta_size, delta->original_size);
+    } else {
+        printf("Diff for %s (version %u):\n", filename, target_version);
+        print_delta_info(delta);
+    }
+
+    delta_free(delta);
+    storage_free(config);
     return 0;
 }
 
