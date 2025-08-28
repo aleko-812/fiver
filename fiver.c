@@ -120,7 +120,7 @@ void print_command_help(const char *command_name) {
         printf("Arguments:\n");
         printf("  <file>        Path to the file to track\n\n");
         printf("Options:\n");
-        printf("  --message, -m <msg>  Add a custom message for this version\n");
+        printf("  --message, -m <msg>  Add a custom message for this version (max 255 characters)\n");
         printf("  --force, -f          Overwrite existing version if it exists\n\n");
         printf("Examples:\n");
         printf("  fiver track document.pdf\n");
@@ -184,6 +184,7 @@ void print_command_help(const char *command_name) {
 // Global flags
 static int verbose_flag = 0;
 static int quiet_flag = 0;
+static char *message_flag = NULL;
 
 // Main function
 int main(int argc, char *argv[]) {
@@ -248,6 +249,24 @@ int main(int argc, char *argv[]) {
                 cmd_argv[j] = cmd_argv[j + 1];
             }
             cmd_argc--;
+            i--; // Recheck this position
+        }
+        else if (strcmp(cmd_argv[i], "--message") == 0 || strcmp(cmd_argv[i], "-m") == 0) {
+            if (i + 1 >= cmd_argc) {
+                print_error("--message requires a value");
+                return 1;
+            }
+            message_flag = cmd_argv[i + 1];
+            if (strlen(message_flag) > 255) {
+                print_error("Message is too long (max 255 characters)");
+                return 1;
+            }
+
+            // Remove both --message and its value from arguments
+            for (int j = i; j < cmd_argc - 2; j++) {
+                cmd_argv[j] = cmd_argv[j + 2];
+            }
+            cmd_argc -= 2;
             i--; // Recheck this position
         }
     }
@@ -361,7 +380,7 @@ int cmd_track(int argc, char *argv[]) {
     }
 
     // Track the file version
-    int result = track_file_version(config, filename, file_data, file_size);
+    int result = track_file_version(config, filename, file_data, file_size, message_flag);
 
     // Clean up file data
     free(file_data);

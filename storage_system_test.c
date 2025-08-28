@@ -7,7 +7,7 @@
 StorageConfig* storage_init(const char* storage_dir);
 void storage_free(StorageConfig* config);
 int save_delta(StorageConfig* config, const char* filename, uint32_t version,
-               const DeltaInfo* delta, const uint8_t* original_data);
+               const DeltaInfo* delta, const uint8_t* original_data, const char* message);
 DeltaInfo* load_delta(StorageConfig* config, const char* filename, uint32_t version);
 int get_file_versions(StorageConfig* config, const char* filename,
                      uint32_t* versions, uint32_t max_versions);
@@ -58,7 +58,7 @@ void test_basic_storage() {
 
     // Save delta
     int result = save_delta(config, "test_file.txt", 1, delta,
-                           (const uint8_t*)original_text);
+                           (const uint8_t*)original_text, NULL);
 
     if (result == 0) {
         printf("✓ Delta saved successfully\n");
@@ -145,7 +145,7 @@ void test_version_management() {
                            (const uint8_t*)versions[i], strlen(versions[i]));
 
         if (delta != NULL) {
-            int result = save_delta(config, filename, i + 1, delta, original_data);
+            int result = save_delta(config, filename, i + 1, delta, original_data, NULL);
             if (result == 0) {
                 printf("✓ Version %d saved successfully\n", i + 1);
             } else {
@@ -214,7 +214,7 @@ void test_binary_storage() {
     }
 
     // Save delta
-    if (save_delta(config, "binary_test.bin", 1, delta, original_binary) == 0) {
+    if (save_delta(config, "binary_test.bin", 1, delta, original_binary, NULL) == 0) {
         printf("✓ Binary delta saved successfully\n");
 
         // Load and apply delta

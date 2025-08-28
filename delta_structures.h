@@ -111,6 +111,7 @@ typedef struct {
     uint32_t operation_count;  // Number of delta operations
     time_t timestamp;          // Creation timestamp
     char checksum[64];         // File checksum (for integrity)
+    char message[256];         // Message associated with the version
 } FileMetadata;
 
 // Storage system configuration
@@ -130,7 +131,7 @@ void storage_free(StorageConfig* config);
 
 // Delta storage operations
 int save_delta(StorageConfig* config, const char* filename, uint32_t version,
-               const DeltaInfo* delta, const uint8_t* original_data);
+               const DeltaInfo* delta, const uint8_t* original_data, const char* message);
 DeltaInfo* load_delta(StorageConfig* config, const char* filename, uint32_t version);
 
 // Version management
@@ -138,7 +139,7 @@ int get_file_versions(StorageConfig* config, const char* filename,
                      uint32_t* versions, uint32_t max_versions);
 int delete_version(StorageConfig* config, const char* filename, uint32_t version);
 int track_file_version(StorageConfig* config, const char* filename,
-                      const uint8_t* file_data, uint32_t file_size);
+                      const uint8_t* file_data, uint32_t file_size, const char* message);
 
 // Delta application
 int apply_delta(const DeltaInfo* delta, const uint8_t* original_data,

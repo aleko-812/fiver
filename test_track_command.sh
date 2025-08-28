@@ -87,7 +87,7 @@ check_file_exists() {
 # Function to cleanup test files
 cleanup() {
     echo -e "${YELLOW}Cleaning up test files...${NC}"
-    rm -f test_file.txt empty_file.txt test_binary.bin large_test_file.bin file1.txt file2.txt "test file with spaces.txt"
+    rm -f test_file.txt empty_file.txt test_binary.bin large_test_file.bin file1.txt file2.txt "test file with spaces.txt" message_test.txt
     rm -rf fiver_storage
     echo "Cleanup complete"
     echo ""
@@ -225,12 +225,29 @@ run_test_with_output "Invalid option" "./fiver --invalid-option" 1 "Unknown comm
 # Test 25: Version flag
 run_test_with_output "Version flag" "./fiver --version" 0 "fiver 1.0.0"
 
+# Test 26: Track with message flag
+echo "test content" > message_test.txt
+run_test_with_output "Track with message" "./fiver track message_test.txt --message 'Test message'" 0 "Tracked message_test.txt"
+
+# Test 27: Track with short message flag
+run_test_with_output "Track with short message flag" "./fiver track message_test.txt -m 'Short flag test'" 0 "Tracked message_test.txt"
+
+# Test 28: Track without message (should work)
+run_test_with_output "Track without message" "./fiver track message_test.txt" 0 "Tracked message_test.txt"
+
+# Test 29: Message flag without value
+run_test_with_output "Message flag without value" "./fiver track message_test.txt --message" 1 "requires a value"
+
+# Test 30: Message too long
+long_message=$(printf 'a%.0s' {1..300})  # Create a 300-character string
+run_test_with_output "Message too long" "./fiver track message_test.txt --message '$long_message'" 1 "Message is too long"
+
 echo ""
 echo -e "${YELLOW}==========================================${NC}"
 echo -e "${YELLOW}  STORAGE VERIFICATION TESTS${NC}"
 echo -e "${YELLOW}==========================================${NC}"
 
-# Test 26: Verify storage structure
+# Test 31: Verify storage structure
 echo -e "${BLUE}Checking storage directory structure...${NC}"
 if [ -d "fiver_storage" ]; then
     echo "Storage directory contents:"

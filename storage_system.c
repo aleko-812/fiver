@@ -108,7 +108,7 @@ void generate_metadata_filename(const char* original_filename, uint32_t version,
  * Save delta to storage
  */
 int save_delta(StorageConfig* config, const char* filename, uint32_t version,
-               const DeltaInfo* delta, const uint8_t* original_data) {
+               const DeltaInfo* delta, const uint8_t* original_data, const char* message) {
     if (config == NULL || filename == NULL || delta == NULL) return -1;
 
     char storage_filename[512];
@@ -159,6 +159,13 @@ int save_delta(StorageConfig* config, const char* filename, uint32_t version,
     metadata.delta_size = delta->delta_size;
     metadata.operation_count = delta->operation_count;
     metadata.timestamp = time(NULL);
+    if (message != NULL) {
+        strncpy(metadata.message, message, sizeof(metadata.message) - 1);
+        metadata.message[sizeof(metadata.message) - 1] = '\0';
+    } else {
+        metadata.message[0] = '\0';  // Empty message
+    }
+
 
     // Calculate checksum of original data
     if (original_data != NULL) {
@@ -440,7 +447,7 @@ int apply_delta(const DeltaInfo* delta, const uint8_t* original_data,
  * Track a new version of a file
  */
 int track_file_version(StorageConfig* config, const char* filename,
-                      const uint8_t* file_data, uint32_t file_size) {
+                      const uint8_t* file_data, uint32_t file_size, const char* message) {
     if (config == NULL || filename == NULL || file_data == NULL) return -1;
 
     // Get current version number
@@ -515,7 +522,7 @@ int track_file_version(StorageConfig* config, const char* filename,
     }
 
     // Save the delta
-    int result = save_delta(config, filename, new_version, delta, original_data);
+    int result = save_delta(config, filename, new_version, delta, original_data, message);
 
     // Cleanup
     delta_free(delta);
