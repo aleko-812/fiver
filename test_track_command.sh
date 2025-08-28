@@ -87,7 +87,7 @@ check_file_exists() {
 # Function to cleanup test files
 cleanup() {
     echo -e "${YELLOW}Cleaning up test files...${NC}"
-    rm -f test_file.txt empty_file.txt test_binary.bin large_test_file.bin file1.txt file2.txt "test file with spaces.txt" message_test.txt list1.txt list2.txt
+    rm -f test_file.txt empty_file.txt test_binary.bin large_test_file.bin file1.txt file2.txt "test file with spaces.txt" message_test.txt list1.txt list2.txt status_test.txt
     rm -rf fiver_storage
     echo "Cleanup complete"
     echo ""
@@ -322,6 +322,29 @@ run_test_with_output "List json" "./fiver list --format json" 0 "\"files\""
 
 # Test 48: List unknown option
 run_test_with_output "List unknown option" "./fiver list --bogus" 1 "Unknown option"
+
+# Status command tests
+# Test 49: Status help
+run_test_with_output "Status help" "./fiver status --help" 0 "Usage: fiver status"
+
+# Test 50: Status missing file
+run_test_with_output "Status missing file" "./fiver status" 1 "missing file argument"
+
+# Test 51: Status no versions
+run_test_with_output "Status no versions" "./fiver status untracked_status.txt" 1 "No versions found"
+
+# Create file for status testing
+echo "status content" > status_test.txt
+run_test_with_output "Track for status" "./fiver track status_test.txt" 0 "Tracked status_test.txt"
+
+# Test 52: Status default
+run_test_with_output "Status default" "./fiver status status_test.txt" 0 "Tracked: yes"
+
+# Test 53: Status json
+run_test_with_output "Status json" "./fiver status status_test.txt --json" 0 "\"tracked\": true"
+
+# Test 54: Status unknown option
+run_test_with_output "Status unknown option" "./fiver status status_test.txt --bogus" 1 "Unknown option"
 
 # Test 26: Track with message flag
 echo "test content" > message_test.txt

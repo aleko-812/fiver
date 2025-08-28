@@ -788,11 +788,123 @@ int cmd_status(int argc, char *argv[]) {
     }
 
     const char *filename = argv[0];
+
+    // Options: --json
+    int json_flag_local = 0;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--json") == 0) {
+            json_flag_local = 1;
+        } else {
+            print_error("Unknown option: %s", argv[i]);
+            return 1;
+        }
+    }
+
     if (verbose_flag) {
         print_info("Showing status for file: %s", filename);
     }
 
-    // TODO: Implement actual status logic
-    print_info("Status for %s (placeholder implementation)", filename);
+    // Initialize storage
+    StorageConfig* config = storage_init("./fiver_storage");
+    if (config == NULL) {
+        print_error("Failed to initialize storage");
+        return 1;
+    }
+
+    // Get versions
+    uint32_t versions[512];
+    int count = get_file_versions(config, filename, versions, 512);
+    if (count <= 0) {
+        print_error("No versions found for: %s", filename);
+        storage_free(config);
+        return 1;
+    }
+
+    // Find latest version
+    uint32_t latest_version = versions[0];
+    for (int i = 1; i < count; i++) {
+        if (versions[i] > latest_version) {
+            latest_version = versions[i];
+        }
+    }
+
+    // Load latest metadata
+    char metadata_filename[512];
+    snprintf(metadata_filename, sizeof(metadata_filename), "%s/%s_v%u.meta",
+             config->storage_dir, filename, latest_version);
+
+    FILE* meta_file = fopen(metadata_filename, "rb");
+    if (meta_file == NULL) {
+        print_error("Cannot read metadata for version %u", latest_version);
+        storage_free(config);
+        return 1;
+    }
+
+    FileMetadata meta;
+    memset(&meta, 0, sizeof(meta));
+    if (fread(&meta, sizeof(FileMetadata), 1, meta_file) != 1) {
+        print_error("Failed to read metadata");
+        fclose(meta_file);
+        storage_free(config);
+        return 1;
+    }
+    fclose(meta_file);
+
+    // Check if current file exists and compare
+    struct stat current_st;
+    int current_exists = (stat(filename, &current_st) == 0);
+
+    // For now, we'll skip hash comparison since calculate_hash is not implemented
+    // TODO: Implement proper hash comparison when calculate_hash is available
+
+    // Output
+    if (json_flag_local) {
+        printf("{\n");
+        printf("  \"file\": \"%s\",\n", filename);
+        printf("  \"tracked\": true,\n");
+        printf("  \"version_count\": %d,\n", count);
+        printf("  \"latest_version\": %u,\n", latest_version);
+        printf("  \"latest_timestamp\": %ld,\n", (long)meta.timestamp);
+        printf("  \"latest_operations\": %u,\n", meta.operation_count);
+        printf("  \"latest_delta_size\": %u,\n", meta.delta_size);
+        printf("  \"latest_message\": \"%s\",\n", meta.message);
+        printf("  \"current_file_exists\": %s,\n", current_exists ? "true" : "false");
+        if (current_exists) {
+            printf("  \"current_file_size\": %ld,\n", (long)current_st.st_size);
+            printf("  \"current_file_modified\": %ld,\n", (long)current_st.st_mtime);
+            printf("  \"is_up_to_date\": \"unknown\"\n");
+        } else {
+            printf("  \"is_up_to_date\": false\n");
+        }
+        printf("}\n");
+    } else {
+        printf("Status for %s:\n", filename);
+        printf("  Tracked: yes\n");
+        printf("  Versions: %d\n", count);
+        printf("  Latest version: %u\n", latest_version);
+
+        char timebuf[64];
+        struct tm *tm_info = localtime(&meta.timestamp);
+        if (tm_info) {
+            strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", tm_info);
+        } else {
+            strcpy(timebuf, "unknown");
+        }
+        printf("  Latest timestamp: %s\n", timebuf);
+        printf("  Latest operations: %u\n", meta.operation_count);
+        printf("  Latest delta size: %u bytes\n", meta.delta_size);
+        if (meta.message[0]) {
+            printf("  Latest message: %s\n", meta.message);
+        }
+
+        printf("  Current file: %s\n", current_exists ? "exists" : "missing");
+        if (current_exists) {
+            printf("  Current size: %ld bytes\n", (long)current_st.st_size);
+            printf("  Current modified: %s\n", ctime(&current_st.st_mtime));
+            printf("  Up to date: unknown (hash comparison not implemented)\n");
+        }
+    }
+
+    storage_free(config);
     return 0;
 }
