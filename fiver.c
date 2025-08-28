@@ -121,7 +121,6 @@ void print_command_help(const char *command_name) {
         printf("  <file>        Path to the file to track\n\n");
         printf("Options:\n");
         printf("  --message, -m <msg>  Add a custom message for this version (max 255 characters)\n");
-        printf("  --force, -f          Overwrite existing version if it exists\n\n");
         printf("Examples:\n");
         printf("  fiver track document.pdf\n");
         printf("  fiver track document.pdf --message \"Added new chapter\"\n");
