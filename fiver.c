@@ -9,6 +9,7 @@
 #include <ctype.h>
 #include <time.h>
 #include "delta_structures.h"
+#include <errno.h>
 
 // Version information
 #define FIVER_VERSION "1.0.0"
@@ -94,6 +95,7 @@ void print_usage(const char *program_name) {
     printf("  %s restore document.pdf --version 1\n", program_name);
     printf("  %s history document.pdf\n", program_name);
     printf("  %s list\n", program_name);
+    printf("  %s status document.pdf\n", program_name);
 
     printf("\nFor more information about a command, run:\n");
     printf("  %s <command> --help\n", program_name);
@@ -144,12 +146,13 @@ void print_command_help(const char *command_name) {
         printf("Arguments:\n");
         printf("  <file>        Path to the tracked file\n\n");
         printf("Options:\n");
-        printf("  --version, -v <N>    Version to restore (required)\n");
-        printf("  --output, -o <path>  Output path (default: original path)\n");
-        printf("  --force, -f          Overwrite existing file\n\n");
+        printf("  --version <N>    Restore to specific version (default: latest)\n");
+        printf("  --force          Overwrite existing file\n");
+        printf("  --json           Output in JSON format\n\n");
         printf("Examples:\n");
+        printf("  fiver restore document.pdf\n");
         printf("  fiver restore document.pdf --version 2\n");
-        printf("  fiver restore document.pdf --version 1 --output old_version.pdf\n");
+        printf("  fiver restore document.pdf --version 1 --force\n");
     }
     else if (strcmp(command_name, "history") == 0) {
         printf("Arguments:\n");
@@ -501,17 +504,147 @@ int cmd_diff(int argc, char *argv[]) {
 int cmd_restore(int argc, char *argv[]) {
     if (argc < 1) {
         print_error("restore: missing file argument");
-        printf("Usage: fiver restore <file> --version <N> [options]\n");
+        printf("Usage: fiver restore <file> [--version <N>] [options]\n");
+        printf("Options:\n");
+        printf("  --version <N>    Restore to specific version (default: latest)\n");
+        printf("  --force          Overwrite existing file\n");
+        printf("  --json           Output in JSON format\n");
+        printf("Examples:\n");
+        printf("  fiver restore document.pdf\n");
+        printf("  fiver restore document.pdf --version 2\n");
+        printf("  fiver restore document.pdf --version 1 --force\n");
         return 1;
     }
 
     const char *filename = argv[0];
-    if (verbose_flag) {
-        print_info("Restoring file: %s", filename);
+    uint32_t target_version = 0; // 0 means latest
+    int force_flag = 0;
+    int json_flag = 0;
+
+    // Parse options
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--version") == 0) {
+            if (i + 1 >= argc) {
+                print_error("--version requires a value");
+                return 1;
+            }
+            long v = strtol(argv[i + 1], NULL, 10);
+            if (v <= 0) {
+                print_error("Invalid version: %s (must be > 0)", argv[i + 1]);
+                return 1;
+            }
+            target_version = (uint32_t)v;
+            i++; // Skip the value
+        } else if (strcmp(argv[i], "--force") == 0) {
+            force_flag = 1;
+        } else if (strcmp(argv[i], "--json") == 0) {
+            json_flag = 1;
+        } else {
+            print_error("Unknown option: %s", argv[i]);
+            return 1;
+        }
     }
 
-    // TODO: Implement actual restore logic
-    print_success("Restored %s (placeholder implementation)", filename);
+    if (verbose_flag) {
+        print_info("Restoring file: %s", filename);
+        if (target_version > 0) {
+            print_info("Target version: %u", target_version);
+        } else {
+            print_info("Target version: latest");
+        }
+    }
+
+    // Initialize storage
+    StorageConfig* config = storage_init("./fiver_storage");
+    if (config == NULL) {
+        print_error("Failed to initialize storage");
+        return 1;
+    }
+
+    // Get available versions
+    uint32_t versions[512];
+    int count = get_file_versions(config, filename, versions, 512);
+    if (count <= 0) {
+        print_error("No versions found for: %s", filename);
+        storage_free(config);
+        return 1;
+    }
+
+    // Find the target version
+    if (target_version == 0) {
+        // Find latest version
+        target_version = versions[0];
+        for (int i = 1; i < count; i++) {
+            if (versions[i] > target_version) {
+                target_version = versions[i];
+            }
+        }
+    } else {
+        // Validate that the target version exists
+        int version_exists = 0;
+        for (int i = 0; i < count; i++) {
+            if (versions[i] == target_version) {
+                version_exists = 1;
+                break;
+            }
+        }
+        if (!version_exists) {
+            print_error("Version %u not found for: %s", target_version, filename);
+            storage_free(config);
+            return 1;
+        }
+    }
+
+    // Check if target file already exists
+    if (!force_flag && access(filename, F_OK) == 0) {
+        print_error("File %s already exists. Use --force to overwrite.", filename);
+        storage_free(config);
+        return 1;
+    }
+
+    // Reconstruct the file
+    uint32_t file_size;
+    uint8_t* file_data = reconstruct_file_from_deltas(config, filename, target_version, &file_size);
+    if (file_data == NULL) {
+        print_error("Failed to reconstruct version %u of: %s", target_version, filename);
+        storage_free(config);
+        return 1;
+    }
+
+    // Write the file
+    FILE* output_file = fopen(filename, "wb");
+    if (output_file == NULL) {
+        print_error("Failed to create file: %s (%s)", filename, strerror(errno));
+        free(file_data);
+        storage_free(config);
+        return 1;
+    }
+
+    size_t written = fwrite(file_data, 1, file_size, output_file);
+    fclose(output_file);
+
+    if (written != file_size) {
+        print_error("Failed to write file: %s (wrote %zu of %u bytes)", filename, written, file_size);
+        free(file_data);
+        storage_free(config);
+        return 1;
+    }
+
+    // Output result
+    if (json_flag) {
+        printf("{\n");
+        printf("  \"file\": \"%s\",\n", filename);
+        printf("  \"restored_version\": %u,\n", target_version);
+        printf("  \"file_size\": %u,\n", file_size);
+        printf("  \"success\": true\n");
+        printf("}\n");
+    } else {
+        print_success("Restored %s to version %u (%u bytes)", filename, target_version, file_size);
+    }
+
+    // Cleanup
+    free(file_data);
+    storage_free(config);
     return 0;
 }
 

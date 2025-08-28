@@ -87,7 +87,7 @@ check_file_exists() {
 # Function to cleanup test files
 cleanup() {
     echo -e "${YELLOW}Cleaning up test files...${NC}"
-    rm -f test_file.txt empty_file.txt test_binary.bin large_test_file.bin file1.txt file2.txt "test file with spaces.txt" message_test.txt list1.txt list2.txt status_test.txt delta_test1.txt delta_test2.txt original_size_test.txt
+    rm -f test_file.txt empty_file.txt test_binary.bin large_test_file.bin file1.txt file2.txt "test file with spaces.txt" message_test.txt list1.txt list2.txt status_test.txt delta_test1.txt delta_test2.txt original_size_test.txt restore_test.txt
     rm -rf fiver_storage
     echo "Cleanup complete"
     echo ""
@@ -383,6 +383,45 @@ run_test_with_output "Track original size test v1" "./fiver track original_size_
 echo "Original size test content with more data" > original_size_test.txt
 run_test_with_output "Track original size test v2" "./fiver track original_size_test.txt" 0 "Tracked original_size_test.txt"
 run_test_with_output "Original size calculation" "./fiver diff original_size_test.txt --version 2" 0 "Original size: 27 bytes"
+
+# Restore command tests
+# Test 62: Restore help
+run_test_with_output "Restore help" "./fiver restore --help" 0 "Usage: fiver restore"
+
+# Test 63: Restore missing file
+run_test_with_output "Restore missing file" "./fiver restore" 1 "missing file argument"
+
+# Test 64: Restore no versions
+run_test_with_output "Restore no versions" "./fiver restore untracked_restore.txt" 1 "No versions found"
+
+# Create file for restore testing
+echo "Restore test v1" > restore_test.txt
+run_test_with_output "Track for restore v1" "./fiver track restore_test.txt" 0 "Tracked restore_test.txt"
+echo "Restore test v2 with more content" > restore_test.txt
+run_test_with_output "Track for restore v2" "./fiver track restore_test.txt" 0 "Tracked restore_test.txt"
+echo "Restore test v3 with completely different content" > restore_test.txt
+run_test_with_output "Track for restore v3" "./fiver track restore_test.txt" 0 "Tracked restore_test.txt"
+
+# Test 65: Restore to specific version
+run_test_with_output "Restore to version 1" "./fiver restore restore_test.txt --version 1 --force" 0 "Restored restore_test.txt to version 1"
+
+# Test 66: Restore to latest version
+run_test_with_output "Restore to latest" "./fiver restore restore_test.txt --force" 0 "Restored restore_test.txt to version 3"
+
+# Test 67: Restore JSON output
+run_test_with_output "Restore JSON" "./fiver restore restore_test.txt --version 2 --json --force" 0 "\"restored_version\": 2"
+
+# Test 68: Restore invalid version
+run_test_with_output "Restore invalid version" "./fiver restore restore_test.txt --version 99" 1 "Version 99 not found"
+
+# Test 69: Restore without force (file exists)
+run_test_with_output "Restore without force" "./fiver restore restore_test.txt --version 1" 1 "already exists"
+
+# Test 70: Restore unknown option
+run_test_with_output "Restore unknown option" "./fiver restore restore_test.txt --bogus" 1 "Unknown option"
+
+# Test 71: Verify restore actually worked
+run_test_with_output "Verify restore content" "cat restore_test.txt" 0 "Restore test v2 with more content"
 
 # Test 26: Track with message flag
 echo "test content" > message_test.txt
