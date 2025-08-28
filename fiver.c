@@ -5,6 +5,8 @@
 #include <getopt.h>
 #include <stdarg.h>
 #include <sys/stat.h>
+#include <dirent.h>
+#include <ctype.h>
 #include <time.h>
 #include "delta_structures.h"
 
@@ -635,8 +637,146 @@ int cmd_list(int argc, char *argv[]) {
         print_info("Listing tracked files");
     }
 
-    // TODO: Implement actual list logic
-    print_info("List of tracked files (placeholder implementation)");
+    // Options: --show-sizes, --format <table|json>
+    int show_sizes = 0;
+    const char *format = "table";
+    for (int i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "--show-sizes") == 0) {
+            show_sizes = 1;
+        } else if (strcmp(argv[i], "--format") == 0) {
+            if (i + 1 >= argc) { print_error("--format requires a value"); return 1; }
+            format = argv[i + 1];
+            i++;
+        } else {
+            print_error("Unknown option: %s", argv[i]);
+            return 1;
+        }
+    }
+
+    StorageConfig* config = storage_init("./fiver_storage");
+    if (!config) {
+        print_error("Failed to initialize storage");
+        return 1;
+    }
+
+    // Aggregate by base filename
+    typedef struct {
+        char name[256];
+        uint32_t latest_version;
+        uint32_t version_count;
+        uint64_t total_delta;
+    } FileSummary;
+
+    FileSummary summaries[1024];
+    int summary_count = 0;
+
+    DIR *dir = opendir(config->storage_dir);
+    if (!dir) {
+        print_error("Cannot open storage dir: %s", config->storage_dir);
+        storage_free(config);
+        return 1;
+    }
+
+    struct dirent *ent;
+    while ((ent = readdir(dir)) != NULL) {
+        const char *fname = ent->d_name;
+        size_t len = strlen(fname);
+        if (len < 6) continue; // too short
+        // We care only about .meta files of pattern <base>_v<ver>.meta
+        if (len >= 5 && strcmp(fname + len - 5, ".meta") == 0) {
+            // Find "_v" from the end
+            const char *suffix = fname + len - 5; // points at ".meta"
+            const char *p = suffix;
+            // scan backwards to find 'v'
+            int idx_v = -1;
+            for (int i = (int)(len - 6); i >= 0; i--) {
+                if (fname[i] == 'v' && i > 0 && fname[i - 1] == '_') { idx_v = i; break; }
+            }
+            if (idx_v < 0) continue;
+            // base name is upto idx_v-1 (exclude "_v")
+            size_t base_len = (size_t)(idx_v - 1);
+            if (base_len >= sizeof(summaries[0].name)) base_len = sizeof(summaries[0].name) - 1;
+            char base[256];
+            memcpy(base, fname, base_len);
+            base[base_len] = '\0';
+
+            // parse version number after 'v' until '.'
+            uint32_t ver = 0;
+            for (size_t i = (size_t)idx_v + 1; i < len && fname[i] != '.'; i++) {
+                if (!isdigit((unsigned char)fname[i])) { ver = 0; break; }
+                ver = ver * 10 + (uint32_t)(fname[i] - '0');
+            }
+            if (ver == 0) continue;
+
+            // read metadata to get delta_size
+            char metadata_path[1024];
+            snprintf(metadata_path, sizeof(metadata_path), "%s/%s", config->storage_dir, fname);
+            FILE *mf = fopen(metadata_path, "rb");
+            FileMetadata meta; memset(&meta, 0, sizeof(meta));
+            if (mf) {
+                fread(&meta, sizeof(FileMetadata), 1, mf);
+                fclose(mf);
+            }
+
+            // find or add summary
+            int pos = -1;
+            for (int i = 0; i < summary_count; i++) {
+                if (strcmp(summaries[i].name, base) == 0) { pos = i; break; }
+            }
+            if (pos < 0 && summary_count < (int)(sizeof(summaries)/sizeof(summaries[0]))) {
+                pos = summary_count++;
+                strncpy(summaries[pos].name, base, sizeof(summaries[pos].name) - 1);
+                summaries[pos].name[sizeof(summaries[pos].name) - 1] = '\0';
+                summaries[pos].latest_version = 0;
+                summaries[pos].version_count = 0;
+                summaries[pos].total_delta = 0;
+            }
+            if (pos >= 0) {
+                summaries[pos].version_count += 1;
+                if (ver > summaries[pos].latest_version) summaries[pos].latest_version = ver;
+                summaries[pos].total_delta += meta.delta_size;
+            }
+        }
+    }
+    closedir(dir);
+
+    // Output
+    if (strcmp(format, "json") == 0) {
+        printf("{\n  \"files\": [\n");
+        for (int i = 0; i < summary_count; i++) {
+            if (i > 0) printf(",\n");
+            if (show_sizes) {
+                printf("    { \"name\": \"%s\", \"versions\": %u, \"latest\": %u, \"total_delta\": %llu }",
+                       summaries[i].name, summaries[i].version_count, summaries[i].latest_version,
+                       (unsigned long long)summaries[i].total_delta);
+            } else {
+                printf("    { \"name\": \"%s\", \"versions\": %u, \"latest\": %u }",
+                       summaries[i].name, summaries[i].version_count, summaries[i].latest_version);
+            }
+        }
+        printf("\n  ]\n}\n");
+    } else { // table (default)
+        if (show_sizes) {
+            printf("Tracked files:\n");
+            printf("Name                              Versions  Latest  TotalDelta\n");
+            printf("--------------------------------  --------  ------  ----------\n");
+            for (int i = 0; i < summary_count; i++) {
+                printf("%-32s  %-8u  %-6u  %-10llu\n", summaries[i].name,
+                       summaries[i].version_count, summaries[i].latest_version,
+                       (unsigned long long)summaries[i].total_delta);
+            }
+        } else {
+            printf("Tracked files:\n");
+            printf("Name                              Versions  Latest\n");
+            printf("--------------------------------  --------  ------\n");
+            for (int i = 0; i < summary_count; i++) {
+                printf("%-32s  %-8u  %-6u\n", summaries[i].name,
+                       summaries[i].version_count, summaries[i].latest_version);
+            }
+        }
+    }
+
+    storage_free(config);
     return 0;
 }
 

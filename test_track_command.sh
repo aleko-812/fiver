@@ -87,7 +87,7 @@ check_file_exists() {
 # Function to cleanup test files
 cleanup() {
     echo -e "${YELLOW}Cleaning up test files...${NC}"
-    rm -f test_file.txt empty_file.txt test_binary.bin large_test_file.bin file1.txt file2.txt "test file with spaces.txt" message_test.txt
+    rm -f test_file.txt empty_file.txt test_binary.bin large_test_file.bin file1.txt file2.txt "test file with spaces.txt" message_test.txt list1.txt list2.txt
     rm -rf fiver_storage
     echo "Cleanup complete"
     echo ""
@@ -295,6 +295,33 @@ run_test_with_output "History limit 2" "./fiver history hist.txt --limit 2" 0 "V
 
 # Test 42: History unknown option
 run_test_with_output "History unknown option" "./fiver history hist.txt --bogus" 1 "Unknown option"
+
+# List command tests
+# Test 43: List help
+run_test_with_output "List help" "./fiver list --help" 0 "Usage: fiver list"
+
+# Test 44: List default (empty)
+run_test_with_output "List empty" "./fiver list" 0 "Tracked files:"
+
+# Create some files for list testing
+echo "list1" > list1.txt
+run_test_with_output "Track list1" "./fiver track list1.txt" 0 "Tracked list1.txt"
+echo "list2" > list2.txt
+run_test_with_output "Track list2" "./fiver track list2.txt" 0 "Tracked list2.txt"
+echo "list2v2" > list2.txt
+run_test_with_output "Track list2 v2" "./fiver track list2.txt" 0 "Tracked list2.txt"
+
+# Test 45: List with files
+run_test_with_output "List with files" "./fiver list" 0 "list1"
+
+# Test 46: List with sizes
+run_test_with_output "List with sizes" "./fiver list --show-sizes" 0 "TotalDelta"
+
+# Test 47: List json format
+run_test_with_output "List json" "./fiver list --format json" 0 "\"files\""
+
+# Test 48: List unknown option
+run_test_with_output "List unknown option" "./fiver list --bogus" 1 "Unknown option"
 
 # Test 26: Track with message flag
 echo "test content" > message_test.txt
