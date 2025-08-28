@@ -87,7 +87,7 @@ check_file_exists() {
 # Function to cleanup test files
 cleanup() {
     echo -e "${YELLOW}Cleaning up test files...${NC}"
-    rm -f test_file.txt empty_file.txt test_binary.bin large_test_file.bin file1.txt file2.txt "test file with spaces.txt" message_test.txt list1.txt list2.txt status_test.txt delta_test1.txt delta_test2.txt original_size_test.txt restore_test.txt
+    rm -f test_file.txt empty_file.txt test_binary.bin large_test_file.bin file1.txt file2.txt "test file with spaces.txt" message_test.txt list1.txt list2.txt status_test.txt delta_test1.txt delta_test2.txt original_size_test.txt restore_test.txt output_test_v1.txt output_test_v2.txt output_test_json.txt existing_output.txt
     rm -rf fiver_storage
     echo "Cleanup complete"
     echo ""
@@ -422,6 +422,29 @@ run_test_with_output "Restore unknown option" "./fiver restore restore_test.txt 
 
 # Test 71: Verify restore actually worked
 run_test_with_output "Verify restore content" "cat restore_test.txt" 0 "Restore test v2 with more content"
+
+# Test 72: Restore with output flag
+run_test_with_output "Restore with output flag" "./fiver restore restore_test.txt --version 1 --output output_test_v1.txt" 0 "Restored restore_test.txt to version 1"
+
+# Test 73: Restore with short output flag
+run_test_with_output "Restore with short output flag" "./fiver restore restore_test.txt --version 2 -o output_test_v2.txt" 0 "Restored restore_test.txt to version 2"
+
+# Test 74: Restore with output and JSON
+run_test_with_output "Restore with output and JSON" "./fiver restore restore_test.txt --version 1 --output output_test_json.txt --json" 0 "\"output_file\": \"output_test_json.txt\""
+
+# Test 75: Verify output files content
+run_test_with_output "Verify output v1 content" "cat output_test_v1.txt" 0 "Restore test v1"
+run_test_with_output "Verify output v2 content" "cat output_test_v2.txt" 0 "Restore test v2 with more content"
+run_test_with_output "Verify output JSON content" "cat output_test_json.txt" 0 "Restore test v1"
+
+# Test 76: Output flag without value
+run_test_with_output "Output flag without value" "./fiver restore restore_test.txt --output" 1 "requires a value"
+
+# Test 77: Output flag with existing file (should work without force)
+run_test_with_output "Output to existing file" "./fiver restore restore_test.txt --version 1 --output existing_output.txt" 0 "Restored restore_test.txt to version 1"
+
+# Test 78: Verify existing file was overwritten
+run_test_with_output "Verify existing file overwritten" "cat existing_output.txt" 0 "Restore test v1"
 
 # Test 26: Track with message flag
 echo "test content" > message_test.txt

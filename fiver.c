@@ -147,12 +147,14 @@ void print_command_help(const char *command_name) {
         printf("  <file>        Path to the tracked file\n\n");
         printf("Options:\n");
         printf("  --version <N>    Restore to specific version (default: latest)\n");
+        printf("  --output, -o <path>  Output file path (default: original path)\n");
         printf("  --force          Overwrite existing file\n");
         printf("  --json           Output in JSON format\n\n");
         printf("Examples:\n");
         printf("  fiver restore document.pdf\n");
         printf("  fiver restore document.pdf --version 2\n");
         printf("  fiver restore document.pdf --version 1 --force\n");
+        printf("  fiver restore document.pdf --version 2 --output old_version.pdf\n");
     }
     else if (strcmp(command_name, "history") == 0) {
         printf("Arguments:\n");
@@ -520,6 +522,7 @@ int cmd_restore(int argc, char *argv[]) {
     uint32_t target_version = 0; // 0 means latest
     int force_flag = 0;
     int json_flag = 0;
+    const char *output_path = NULL; // NULL means use original filename
 
     // Parse options
     for (int i = 1; i < argc; i++) {
@@ -539,6 +542,13 @@ int cmd_restore(int argc, char *argv[]) {
             force_flag = 1;
         } else if (strcmp(argv[i], "--json") == 0) {
             json_flag = 1;
+        } else if (strcmp(argv[i], "--output") == 0 || strcmp(argv[i], "-o") == 0) {
+            if (i + 1 >= argc) {
+                print_error("--output requires a value");
+                return 1;
+            }
+            output_path = argv[i + 1];
+            i++; // Skip the value
         } else {
             print_error("Unknown option: %s", argv[i]);
             return 1;
@@ -595,9 +605,12 @@ int cmd_restore(int argc, char *argv[]) {
         }
     }
 
+    // Determine the actual output path
+    const char *actual_output_path = output_path ? output_path : filename;
+
     // Check if target file already exists
-    if (!force_flag && access(filename, F_OK) == 0) {
-        print_error("File %s already exists. Use --force to overwrite.", filename);
+    if (!force_flag && access(actual_output_path, F_OK) == 0) {
+        print_error("File %s already exists. Use --force to overwrite.", actual_output_path);
         storage_free(config);
         return 1;
     }
@@ -612,9 +625,9 @@ int cmd_restore(int argc, char *argv[]) {
     }
 
     // Write the file
-    FILE* output_file = fopen(filename, "wb");
+    FILE* output_file = fopen(actual_output_path, "wb");
     if (output_file == NULL) {
-        print_error("Failed to create file: %s (%s)", filename, strerror(errno));
+        print_error("Failed to create file: %s (%s)", actual_output_path, strerror(errno));
         free(file_data);
         storage_free(config);
         return 1;
@@ -624,7 +637,7 @@ int cmd_restore(int argc, char *argv[]) {
     fclose(output_file);
 
     if (written != file_size) {
-        print_error("Failed to write file: %s (wrote %zu of %u bytes)", filename, written, file_size);
+        print_error("Failed to write file: %s (wrote %zu of %u bytes)", actual_output_path, written, file_size);
         free(file_data);
         storage_free(config);
         return 1;
@@ -634,12 +647,13 @@ int cmd_restore(int argc, char *argv[]) {
     if (json_flag) {
         printf("{\n");
         printf("  \"file\": \"%s\",\n", filename);
+        printf("  \"output_file\": \"%s\",\n", actual_output_path);
         printf("  \"restored_version\": %u,\n", target_version);
         printf("  \"file_size\": %u,\n", file_size);
         printf("  \"success\": true\n");
         printf("}\n");
     } else {
-        print_success("Restored %s to version %u (%u bytes)", filename, target_version, file_size);
+        print_success("Restored %s to version %u (%u bytes) -> %s", filename, target_version, file_size, actual_output_path);
     }
 
     // Cleanup
