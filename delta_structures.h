@@ -144,6 +144,8 @@ int track_file_version(StorageConfig* config, const char* filename,
 // Delta application
 int apply_delta(const DeltaInfo* delta, const uint8_t* original_data,
                 uint8_t* output_buffer, uint32_t output_buffer_size);
+uint8_t* apply_delta_alloc(const uint8_t* original_data, uint32_t original_size, const DeltaInfo* delta);
+uint8_t* reconstruct_file_from_deltas(StorageConfig* config, const char* filename, uint32_t target_version, uint32_t* final_size);
 
 // Utility functions
 uint32_t calculate_hash(const uint8_t* data, uint32_t length);

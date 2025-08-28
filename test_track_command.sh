@@ -87,7 +87,7 @@ check_file_exists() {
 # Function to cleanup test files
 cleanup() {
     echo -e "${YELLOW}Cleaning up test files...${NC}"
-    rm -f test_file.txt empty_file.txt test_binary.bin large_test_file.bin file1.txt file2.txt "test file with spaces.txt" message_test.txt list1.txt list2.txt status_test.txt delta_test1.txt delta_test2.txt
+    rm -f test_file.txt empty_file.txt test_binary.bin large_test_file.bin file1.txt file2.txt "test file with spaces.txt" message_test.txt list1.txt list2.txt status_test.txt delta_test1.txt delta_test2.txt original_size_test.txt
     rm -rf fiver_storage
     echo "Cleanup complete"
     echo ""
@@ -376,6 +376,13 @@ run_test_with_output "Small file new_size" "./fiver diff delta_test2.txt" 0 "New
 echo "This is a much larger file with significantly more content to test delta compression" > delta_test2.txt
 run_test_with_output "Track large file update" "./fiver track delta_test2.txt" 0 "Tracked delta_test2.txt"
 run_test_with_output "Large file new_size" "./fiver diff delta_test2.txt --version 2" 0 "New size: 85 bytes"
+
+# Test 61: Verify original size calculation fix
+echo "Original size test content" > original_size_test.txt
+run_test_with_output "Track original size test v1" "./fiver track original_size_test.txt" 0 "Tracked original_size_test.txt"
+echo "Original size test content with more data" > original_size_test.txt
+run_test_with_output "Track original size test v2" "./fiver track original_size_test.txt" 0 "Tracked original_size_test.txt"
+run_test_with_output "Original size calculation" "./fiver diff original_size_test.txt --version 2" 0 "Original size: 27 bytes"
 
 # Test 26: Track with message flag
 echo "test content" > message_test.txt

@@ -411,7 +411,8 @@ int delete_version(StorageConfig* config, const char* filename, uint32_t version
  */
 int apply_delta(const DeltaInfo* delta, const uint8_t* original_data,
                 uint8_t* output_buffer, uint32_t output_buffer_size) {
-    if (delta == NULL || original_data == NULL || output_buffer == NULL) return -1;
+    if (delta == NULL || output_buffer == NULL) return -1;
+    // original_data can be NULL for first version (where original_size = 0)
 
     uint32_t output_pos = 0;
 
@@ -423,6 +424,12 @@ int apply_delta(const DeltaInfo* delta, const uint8_t* original_data,
                 // Check buffer bounds
                 if (output_pos + op->length > output_buffer_size) {
                     printf("Output buffer too small for COPY operation\n");
+                    return -1;
+                }
+
+                // For first version, there should be no COPY operations
+                if (original_data == NULL) {
+                    printf("COPY operation not allowed when original_data is NULL\n");
                     return -1;
                 }
 
@@ -462,6 +469,95 @@ int apply_delta(const DeltaInfo* delta, const uint8_t* original_data,
 }
 
 /**
+ * Apply delta and allocate result buffer
+ * This is a convenience function that allocates the output buffer and returns the result
+ */
+uint8_t* apply_delta_alloc(const uint8_t* original_data, uint32_t original_size, const DeltaInfo* delta) {
+    if (delta == NULL) return NULL;
+
+    // Allocate output buffer
+    uint8_t* output_buffer = malloc(delta->new_size);
+    if (output_buffer == NULL) {
+        printf("Failed to allocate output buffer\n");
+        return NULL;
+    }
+
+    // Apply delta
+    int result = apply_delta(delta, original_data, output_buffer, delta->new_size);
+    if (result < 0) {
+        printf("Failed to apply delta\n");
+        free(output_buffer);
+        return NULL;
+    }
+
+    return output_buffer;
+}
+
+/**
+ * Reconstruct a file from its delta chain
+ * This function reconstructs a specific version by applying all deltas from version 1 up to the target version
+ */
+uint8_t* reconstruct_file_from_deltas(StorageConfig* config, const char* filename, uint32_t target_version, uint32_t* final_size) {
+    if (config == NULL || filename == NULL || final_size == NULL) return NULL;
+    if (target_version == 0) return NULL;
+
+    // Start with version 1 (which is a full file)
+    uint8_t* current_data = NULL;
+    uint32_t current_size = 0;
+
+    // Load version 1 delta (which contains the full file)
+    DeltaInfo* delta = load_delta(config, filename, 1);
+    if (delta == NULL) {
+        printf("Failed to load version 1 delta\n");
+        return NULL;
+    }
+
+    // Apply version 1 delta to get the initial file
+    current_data = apply_delta_alloc(NULL, 0, delta);
+    current_size = delta->new_size;
+    delta_free(delta);
+
+    if (current_data == NULL) {
+        printf("Failed to apply version 1 delta\n");
+        return NULL;
+    }
+
+    // If we only need version 1, return it
+    if (target_version == 1) {
+        *final_size = current_size;
+        return current_data;
+    }
+
+    // Apply subsequent deltas to reach the target version
+    for (uint32_t version = 2; version <= target_version; version++) {
+        delta = load_delta(config, filename, version);
+        if (delta == NULL) {
+            printf("Failed to load version %u delta\n", version);
+            free(current_data);
+            return NULL;
+        }
+
+        // Apply the delta to get the next version
+        uint8_t* new_data = apply_delta_alloc(current_data, current_size, delta);
+        if (new_data == NULL) {
+            printf("Failed to apply version %u delta\n", version);
+            delta_free(delta);
+            free(current_data);
+            return NULL;
+        }
+
+        // Update current data and size
+        free(current_data);
+        current_data = new_data;
+        current_size = delta->new_size;
+        delta_free(delta);
+    }
+
+    *final_size = current_size;
+    return current_data;
+}
+
+/**
  * Track a new version of a file
  */
 int track_file_version(StorageConfig* config, const char* filename,
@@ -489,13 +585,11 @@ int track_file_version(StorageConfig* config, const char* filename,
     uint32_t original_size = 0;
 
     if (version_count > 0) {
-        DeltaInfo* previous_delta = load_delta(config, filename, new_version - 1);
-        if (previous_delta != NULL) {
-            // For simplicity, we'll assume we have the original file
-            // In a real system, you'd need to reconstruct it from the delta chain
-            printf("Note: This is a simplified implementation. In a real system,\n");
-            printf("you would reconstruct the previous version from the delta chain.\n");
-            delta_free(previous_delta);
+        // Reconstruct the previous version from the delta chain
+        original_data = reconstruct_file_from_deltas(config, filename, new_version - 1, &original_size);
+        if (original_data == NULL) {
+            printf("Failed to reconstruct previous version %u\n", new_version - 1);
+            return -1;
         }
     }
 
