@@ -1,11 +1,11 @@
 # Makefile for fiver CLI tool
 
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c99 -O2 -g
+CFLAGS = -Wall -Wextra -std=c99 -O2 -g -Iinclude
 LDFLAGS =
 
 # Source files
-SOURCES = fiver.c storage_system.c delta_algorithm.c rolling_hash.c hash_table.c
+SOURCES = src/fiver.c src/storage_system.c src/delta_algorithm.c src/rolling_hash.c src/hash_table.c
 TARGET = fiver
 
 # Default target
@@ -17,7 +17,7 @@ $(TARGET): $(SOURCES)
 
 # Clean build artifacts
 clean:
-	rm -f $(TARGET) *.o
+	rm -f $(TARGET) *.o src/*.o tests/*.o
 
 # Install to system (optional)
 install: $(TARGET)
@@ -30,7 +30,7 @@ uninstall:
 # Run automated tests
 test: $(TARGET)
 	@echo "Running automated tests..."
-	./test_track_command.sh
+	./tests/test_track_command.sh
 
 # Development target with debug info
 debug: CFLAGS += -DDEBUG -g3
