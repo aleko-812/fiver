@@ -326,7 +326,7 @@ int cmd_track(int argc, char *argv[]) {
     }
 
     // Initialize storage
-    StorageConfig* config = storage_init("./fiver_storage");
+    StorageConfig* config = storage_init("./.fiver");
     if (config == NULL) {
         print_error("Failed to initialize storage");
         return 1;
@@ -450,7 +450,7 @@ int cmd_diff(int argc, char *argv[]) {
     }
 
     // Initialize storage
-    StorageConfig* config = storage_init("./fiver_storage");
+    StorageConfig* config = storage_init("./.fiver");
     if (config == NULL) {
         print_error("Failed to initialize storage");
         return 1;
@@ -565,7 +565,7 @@ int cmd_restore(int argc, char *argv[]) {
     }
 
     // Initialize storage
-    StorageConfig* config = storage_init("./fiver_storage");
+    StorageConfig* config = storage_init("./.fiver");
     if (config == NULL) {
         print_error("Failed to initialize storage");
         return 1;
@@ -696,7 +696,7 @@ int cmd_history(int argc, char *argv[]) {
     }
 
     // Initialize storage
-    StorageConfig* config = storage_init("./fiver_storage");
+    StorageConfig* config = storage_init("./.fiver");
     if (config == NULL) {
         print_error("Failed to initialize storage");
         return 1;
@@ -800,7 +800,7 @@ int cmd_list(int argc, char *argv[]) {
         }
     }
 
-    StorageConfig* config = storage_init("./fiver_storage");
+    StorageConfig* config = storage_init("./.fiver");
     if (!config) {
         print_error("Failed to initialize storage");
         return 1;
@@ -952,7 +952,7 @@ int cmd_status(int argc, char *argv[]) {
     }
 
     // Initialize storage
-    StorageConfig* config = storage_init("./fiver_storage");
+    StorageConfig* config = storage_init("./.fiver");
     if (config == NULL) {
         print_error("Failed to initialize storage");
         return 1;

@@ -88,7 +88,7 @@ check_file_exists() {
 cleanup() {
     echo -e "${YELLOW}Cleaning up test files...${NC}"
     rm -f test_file.txt empty_file.txt test_binary.bin large_test_file.bin file1.txt file2.txt "test file with spaces.txt" message_test.txt list1.txt list2.txt status_test.txt delta_test1.txt delta_test2.txt original_size_test.txt restore_test.txt output_test_v1.txt output_test_v2.txt output_test_json.txt existing_output.txt
-    rm -rf fiver_storage
+    rm -rf .fiver
     echo "Cleanup complete"
     echo ""
 }
@@ -157,7 +157,7 @@ echo "Hello, fiver!" > test_file.txt
 run_test_with_output "Track text file" "./fiver track test_file.txt" 0 "Tracked test_file.txt"
 
 # Test 9: Check storage directory was created
-if [ -d "fiver_storage" ]; then
+if [ -d ".fiver" ]; then
     echo -e "${GREEN}✓ PASS${NC}: Storage directory created"
     ((TESTS_PASSED++))
 else
@@ -166,46 +166,46 @@ else
 fi
 
 # Test 10: Check storage files were created
-check_file_exists "fiver_storage/test_file.txt_v1.delta"
-check_file_exists "fiver_storage/test_file.txt_v1.meta"
+check_file_exists ".fiver/test_file.txt_v1.delta"
+check_file_exists ".fiver/test_file.txt_v1.meta"
 
 # Test 11: Track same file again (version 2)
 run_test_with_output "Track same file (version 2)" "./fiver track test_file.txt" 0 "Tracked test_file.txt"
 
 # Test 12: Check version 2 files were created
-check_file_exists "fiver_storage/test_file.txt_v2.delta"
-check_file_exists "fiver_storage/test_file.txt_v2.meta"
+check_file_exists ".fiver/test_file.txt_v2.delta"
+check_file_exists ".fiver/test_file.txt_v2.meta"
 
 # Test 13: Track with verbose mode
 run_test_with_output "Track with verbose mode" "./fiver track --verbose test_file.txt" 0 "Read.*bytes from test_file.txt"
 
 # Test 14: Check version 3 files were created
-check_file_exists "fiver_storage/test_file.txt_v3.delta"
-check_file_exists "fiver_storage/test_file.txt_v3.meta"
+check_file_exists ".fiver/test_file.txt_v3.delta"
+check_file_exists ".fiver/test_file.txt_v3.meta"
 
 # Test 15: Track binary file
 dd if=/dev/urandom of=test_binary.bin bs=1024 count=1 > /dev/null 2>&1
 run_test_with_output "Track binary file" "./fiver track test_binary.bin" 0 "Tracked test_binary.bin"
 
 # Test 16: Check binary file storage
-check_file_exists "fiver_storage/test_binary.bin_v1.delta"
-check_file_exists "fiver_storage/test_binary.bin_v1.meta"
+check_file_exists ".fiver/test_binary.bin_v1.delta"
+check_file_exists ".fiver/test_binary.bin_v1.meta"
 
 # Test 17: Track file with spaces in name
 echo "test content" > "test file with spaces.txt"
 run_test_with_output "Track file with spaces" "./fiver track 'test file with spaces.txt'" 0 "Tracked test file with spaces.txt"
 
 # Test 18: Check file with spaces storage
-check_file_exists "fiver_storage/test file with spaces.txt_v1.delta"
-check_file_exists "fiver_storage/test file with spaces.txt_v1.meta"
+check_file_exists ".fiver/test file with spaces.txt_v1.delta"
+check_file_exists ".fiver/test file with spaces.txt_v1.meta"
 
 # Test 19: Track large file (1MB)
 dd if=/dev/urandom of=large_test_file.bin bs=1M count=1 > /dev/null 2>&1
 run_test_with_output "Track large file" "./fiver track large_test_file.bin" 0 "Tracked large_test_file.bin"
 
 # Test 20: Check large file storage
-check_file_exists "fiver_storage/large_test_file.bin_v1.delta"
-check_file_exists "fiver_storage/large_test_file.bin_v1.meta"
+check_file_exists ".fiver/large_test_file.bin_v1.delta"
+check_file_exists ".fiver/large_test_file.bin_v1.meta"
 
 # Test 21: Multiple files tracking
 echo "file1 content" > file1.txt
@@ -213,8 +213,8 @@ echo "file2 content" > file2.txt
 run_test_with_output "Track multiple files" "./fiver track file1.txt && ./fiver track file2.txt" 0 "Tracked"
 
 # Test 22: Check multiple files storage
-check_file_exists "fiver_storage/file1.txt_v1.delta"
-check_file_exists "fiver_storage/file2.txt_v1.delta"
+check_file_exists ".fiver/file1.txt_v1.delta"
+check_file_exists ".fiver/file2.txt_v1.delta"
 
 # Test 23: Invalid command
 run_test_with_output "Invalid command" "./fiver invalid_command" 1 "Unknown command"
@@ -470,14 +470,14 @@ echo -e "${YELLOW}==========================================${NC}"
 
 # Test 40: Verify storage structure
 echo -e "${BLUE}Checking storage directory structure...${NC}"
-if [ -d "fiver_storage" ]; then
+if [ -d ".fiver" ]; then
     echo "Storage directory contents:"
-    ls -la fiver_storage/
+    ls -la .fiver/
     echo ""
 
     # Count files
-    delta_files=$(find fiver_storage -name "*.delta" | wc -l)
-    meta_files=$(find fiver_storage -name "*.meta" | wc -l)
+    delta_files=$(find .fiver -name "*.delta" | wc -l)
+    meta_files=$(find .fiver -name "*.meta" | wc -l)
 
     echo "Found $delta_files delta files and $meta_files meta files"
 
