@@ -347,7 +347,7 @@ int get_file_versions(StorageConfig* config, const char* filename,
     uint32_t version_count = 0;
 
     // Scan storage directory for metadata files
-    char pattern[512];
+    char pattern[1024];
     snprintf(pattern, sizeof(pattern), "%s/%s_v*.meta", config->storage_dir, filename);
 
     // This is a simplified implementation - in a real system, you'd use glob() or readdir()
@@ -473,6 +473,7 @@ int apply_delta(const DeltaInfo* delta, const uint8_t* original_data,
  * This is a convenience function that allocates the output buffer and returns the result
  */
 uint8_t* apply_delta_alloc(const uint8_t* original_data, uint32_t original_size, const DeltaInfo* delta) {
+    (void)original_size; // Parameter not used in this implementation
     if (delta == NULL) return NULL;
 
     // Allocate output buffer
@@ -642,5 +643,5 @@ int track_file_version(StorageConfig* config, const char* filename,
         free(original_data);
     }
 
-    return result == 0 ? new_version : -1;
+    return result == 0 ? (int)new_version : -1;
 }
