@@ -87,7 +87,7 @@ check_file_exists() {
 # Function to cleanup test files
 cleanup() {
     echo -e "${YELLOW}Cleaning up test files...${NC}"
-    rm -f test_file.txt empty_file.txt test_binary.bin large_test_file.bin file1.txt file2.txt "test file with spaces.txt" message_test.txt list1.txt list2.txt status_test.txt delta_test1.txt delta_test2.txt original_size_test.txt restore_test.txt output_test_v1.txt output_test_v2.txt output_test_json.txt existing_output.txt
+    rm -f test_file.txt empty_file.txt test_binary.bin large_test_file.bin file1.txt file2.txt "test file with spaces.txt" message_test.txt list1.txt list2.txt status_test.txt delta_test1.txt delta_test2.txt original_size_test.txt restore_test.txt output_test_v1.txt output_test_v2.txt output_test_json.txt existing_output.txt diff_test.txt hist.txt
     rm -rf .fiver
     echo "Cleanup complete"
     echo ""
