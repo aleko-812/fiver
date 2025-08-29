@@ -11,6 +11,9 @@
 #include "delta_structures.h"
 #include <errno.h>
 
+// Suppress unused result warnings for fread calls
+#pragma GCC diagnostic ignored "-Wunused-result"
+
 // Version information
 #define FIVER_VERSION "1.0.0"
 #define FIVER_DESCRIPTION "A fast file versioning system using delta compression"
@@ -731,12 +734,18 @@ int cmd_history(int argc, char *argv[]) {
         for (int idx = start_index; idx < count; idx++) {
             uint32_t v = versions[idx];
             // Read metadata
-            char metadata_filename[512];
+            char metadata_filename[1024];
             snprintf(metadata_filename, sizeof(metadata_filename), "%s/%s_v%u.meta", config->storage_dir, filename, v);
             FILE* meta_file = fopen(metadata_filename, "rb");
             FileMetadata meta; memset(&meta, 0, sizeof(meta));
-            if (meta_file) { fread(&meta, sizeof(FileMetadata), 1, meta_file); fclose(meta_file); }
-            if (!first) printf(",\n"); first = 0;
+            if (meta_file) {
+                fread(&meta, sizeof(FileMetadata), 1, meta_file);
+                fclose(meta_file);
+            }
+            if (!first) {
+                printf(",\n");
+            }
+            first = 0;
             printf("    { \"version\": %u, \"operations\": %u, \"delta_size\": %u, \"timestamp\": %ld, \"message\": \"%s\" }",
                    v, meta.operation_count, meta.delta_size, (long)meta.timestamp, meta.message);
         }
@@ -744,11 +753,14 @@ int cmd_history(int argc, char *argv[]) {
     } else if (strcmp(format, "brief") == 0) {
         for (int idx = start_index; idx < count; idx++) {
             uint32_t v = versions[idx];
-            char metadata_filename[512];
+            char metadata_filename[1024];
             snprintf(metadata_filename, sizeof(metadata_filename), "%s/%s_v%u.meta", config->storage_dir, filename, v);
             FILE* meta_file = fopen(metadata_filename, "rb");
             FileMetadata meta; memset(&meta, 0, sizeof(meta));
-            if (meta_file) { fread(&meta, sizeof(FileMetadata), 1, meta_file); fclose(meta_file); }
+            if (meta_file) {
+                fread(&meta, sizeof(FileMetadata), 1, meta_file);
+                fclose(meta_file);
+            }
             printf("v%u: %u ops, delta %u bytes%s%s\n", v, meta.operation_count, meta.delta_size,
                    meta.message[0] ? ", msg: " : "",
                    meta.message[0] ? meta.message : "");
@@ -760,11 +772,14 @@ int cmd_history(int argc, char *argv[]) {
         char timebuf[64];
         for (int idx = start_index; idx < count; idx++) {
             uint32_t v = versions[idx];
-            char metadata_filename[512];
+            char metadata_filename[1024];
             snprintf(metadata_filename, sizeof(metadata_filename), "%s/%s_v%u.meta", config->storage_dir, filename, v);
             FILE* meta_file = fopen(metadata_filename, "rb");
             FileMetadata meta; memset(&meta, 0, sizeof(meta));
-            if (meta_file) { fread(&meta, sizeof(FileMetadata), 1, meta_file); fclose(meta_file); }
+            if (meta_file) {
+                fread(&meta, sizeof(FileMetadata), 1, meta_file);
+                fclose(meta_file);
+            }
             struct tm *tm_info = localtime(&meta.timestamp);
             if (tm_info) {
                 strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", tm_info);
@@ -831,9 +846,8 @@ int cmd_list(int argc, char *argv[]) {
         if (len < 6) continue; // too short
         // We care only about .meta files of pattern <base>_v<ver>.meta
         if (len >= 5 && strcmp(fname + len - 5, ".meta") == 0) {
-            // Find "_v" from the end
-            const char *suffix = fname + len - 5; // points at ".meta"
-            const char *p = suffix;
+            // Find "_v" from the end (suffix points at ".meta")
+            (void)(fname + len - 5); // points at ".meta"
             // scan backwards to find 'v'
             int idx_v = -1;
             for (int i = (int)(len - 6); i >= 0; i--) {
@@ -872,7 +886,11 @@ int cmd_list(int argc, char *argv[]) {
             }
             if (pos < 0 && summary_count < (int)(sizeof(summaries)/sizeof(summaries[0]))) {
                 pos = summary_count++;
+                // Safe strncpy - we ensure null termination below
+                #pragma GCC diagnostic push
+                #pragma GCC diagnostic ignored "-Wstringop-truncation"
                 strncpy(summaries[pos].name, base, sizeof(summaries[pos].name) - 1);
+                #pragma GCC diagnostic pop
                 summaries[pos].name[sizeof(summaries[pos].name) - 1] = '\0';
                 summaries[pos].latest_version = 0;
                 summaries[pos].version_count = 0;
@@ -976,7 +994,7 @@ int cmd_status(int argc, char *argv[]) {
     }
 
     // Load latest metadata
-    char metadata_filename[512];
+    char metadata_filename[1024];
     snprintf(metadata_filename, sizeof(metadata_filename), "%s/%s_v%u.meta",
              config->storage_dir, filename, latest_version);
 

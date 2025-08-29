@@ -181,6 +181,7 @@ Match* find_best_match(const uint8_t* original_data, uint32_t original_size,
 DeltaInfo* create_delta_operations(const uint8_t* original_data, uint32_t original_size,
                                   const uint8_t* new_data, uint32_t new_size,
                                   const DeltaState* state) {
+    (void)original_data; // Parameter not used in this implementation
     if (state == NULL) return NULL;
 
     DeltaInfo* delta = malloc(sizeof(DeltaInfo));
