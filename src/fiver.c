@@ -197,27 +197,27 @@ static int quiet_flag = 0;
 static char *message_flag = NULL;
 
 // Main function
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[argc + 1]) {
     if (argc < 2) {
         print_usage(argv[0]);
-        return 1;
+        return EXIT_FAILURE;
     }
 
     // Check for global options first
     if (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0) {
         print_usage(argv[0]);
-        return 0;
+        return EXIT_SUCCESS;
     }
 
     if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-v") == 0) {
         print_version();
-        return 0;
+        return EXIT_SUCCESS;
     }
 
     // Check for command help
     if (argc >= 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0)) {
         print_command_help(argv[1]);
-        return 0;
+        return EXIT_SUCCESS;
     }
 
     // Find the command
@@ -234,7 +234,7 @@ int main(int argc, char *argv[]) {
     if (cmd == NULL) {
         print_error("Unknown command: %s", command_name);
         printf("Run '%s --help' for usage information.\n", argv[0]);
-        return 1;
+        return EXIT_FAILURE;
     }
 
     // Set up command arguments (skip program name and command name)
@@ -264,12 +264,12 @@ int main(int argc, char *argv[]) {
         else if (strcmp(cmd_argv[i], "--message") == 0 || strcmp(cmd_argv[i], "-m") == 0) {
             if (i + 1 >= cmd_argc) {
                 print_error("--message requires a value");
-                return 1;
+                return EXIT_FAILURE;
             }
             message_flag = cmd_argv[i + 1];
             if (strlen(message_flag) > 255) {
                 print_error("Message is too long (max 255 characters)");
-                return 1;
+                return EXIT_FAILURE;
             }
 
             // Remove both --message and its value from arguments
@@ -296,7 +296,7 @@ int cmd_track(int argc, char *argv[]) {
     if (argc < 1) {
         print_error("track: missing file argument");
         printf("Usage: fiver track <file> [options]\n");
-        return 1;
+        return EXIT_FAILURE;
     }
 
     const char *filename = argv[0];
@@ -307,32 +307,32 @@ int cmd_track(int argc, char *argv[]) {
     // Check if file exists
     if (access(filename, F_OK) != 0) {
         print_error("File does not exist: %s", filename);
-        return 1;
+        return EXIT_FAILURE;
     }
 
     // Check if file is readable
     if (access(filename, R_OK) != 0) {
         print_error("File is not readable: %s", filename);
-        return 1;
+        return EXIT_FAILURE;
     }
 
     // Check if it's a regular file
     struct stat st;
     if (stat(filename, &st) != 0) {
         print_error("Cannot access file: %s", filename);
-        return 1;
+        return EXIT_FAILURE;
     }
 
     if (!S_ISREG(st.st_mode)) {
         print_error("Not a regular file: %s", filename);
-        return 1;
+        return EXIT_FAILURE;
     }
 
     // Initialize storage
     StorageConfig* config = storage_init("./.fiver");
     if (config == NULL) {
         print_error("Failed to initialize storage");
-        return 1;
+        return EXIT_FAILURE;
     }
 
     if (verbose_flag) {
@@ -344,7 +344,7 @@ int cmd_track(int argc, char *argv[]) {
     if (file == NULL) {
         print_error("Cannot open file: %s", filename);
         storage_free(config);
-        return 1;
+        return EXIT_FAILURE;
     }
 
     // Get file size
@@ -356,14 +356,14 @@ int cmd_track(int argc, char *argv[]) {
         print_error("Cannot determine file size: %s", filename);
         fclose(file);
         storage_free(config);
-        return 1;
+        return EXIT_FAILURE;
     }
 
     if (file_size == 0) {
         print_error("Cannot track empty file: %s", filename);
         fclose(file);
         storage_free(config);
-        return 1;
+        return EXIT_FAILURE;
     }
 
     // Allocate buffer and read file
@@ -372,7 +372,7 @@ int cmd_track(int argc, char *argv[]) {
         print_error("Out of memory");
         fclose(file);
         storage_free(config);
-        return 1;
+        return EXIT_FAILURE;
     }
 
     size_t bytes_read = fread(file_data, 1, file_size, file);
@@ -382,7 +382,7 @@ int cmd_track(int argc, char *argv[]) {
         print_error("Failed to read file: %s", filename);
         free(file_data);
         storage_free(config);
-        return 1;
+        return EXIT_FAILURE;
     }
 
     if (verbose_flag) {
@@ -398,21 +398,21 @@ int cmd_track(int argc, char *argv[]) {
     if (result < 0) {
         print_error("Failed to track file: %s", filename);
         storage_free(config);
-        return 1;
+        return EXIT_FAILURE;
     }
 
     // Clean up storage config
     storage_free(config);
 
     print_success("Tracked %s (%zu bytes)", filename, bytes_read);
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 int cmd_diff(int argc, char *argv[]) {
     if (argc < 1) {
         print_error("diff: missing file argument");
         printf("Usage: fiver diff <file> [options]\n");
-        return 1;
+        return EXIT_FAILURE;
     }
 
     const char *filename = argv[0];
@@ -425,12 +425,12 @@ int cmd_diff(int argc, char *argv[]) {
         if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-v") == 0) {
             if (i + 1 >= argc) {
                 print_error("--version requires a value");
-                return 1;
+                return EXIT_FAILURE;
             }
             long v = strtol(argv[i + 1], NULL, 10);
             if (v <= 0) {
                 print_error("Invalid version: %s", argv[i + 1]);
-                return 1;
+                return EXIT_FAILURE;
             }
             target_version = (uint32_t)v;
             i++;
@@ -440,7 +440,7 @@ int cmd_diff(int argc, char *argv[]) {
             brief_flag_local = 1;
         } else {
             print_error("Unknown option: %s", argv[i]);
-            return 1;
+            return EXIT_FAILURE;
         }
     }
 
@@ -456,7 +456,7 @@ int cmd_diff(int argc, char *argv[]) {
     StorageConfig* config = storage_init("./.fiver");
     if (config == NULL) {
         print_error("Failed to initialize storage");
-        return 1;
+        return EXIT_FAILURE;
     }
 
     // Resolve latest version if needed
@@ -466,7 +466,7 @@ int cmd_diff(int argc, char *argv[]) {
         if (count <= 0) {
             print_error("No versions found for: %s", filename);
             storage_free(config);
-            return 1;
+            return EXIT_FAILURE;
         }
         uint32_t max_v = versions[0];
         for (int i = 1; i < count; i++) {
@@ -480,7 +480,7 @@ int cmd_diff(int argc, char *argv[]) {
     if (delta == NULL) {
         print_error("Failed to load delta for %s (version %u)", filename, target_version);
         storage_free(config);
-        return 1;
+        return EXIT_FAILURE;
     }
 
     // Output
@@ -503,7 +503,7 @@ int cmd_diff(int argc, char *argv[]) {
 
     delta_free(delta);
     storage_free(config);
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 int cmd_restore(int argc, char *argv[]) {
@@ -518,7 +518,7 @@ int cmd_restore(int argc, char *argv[]) {
         printf("  fiver restore document.pdf\n");
         printf("  fiver restore document.pdf --version 2\n");
         printf("  fiver restore document.pdf --version 1 --force\n");
-        return 1;
+        return EXIT_FAILURE;
     }
 
     const char *filename = argv[0];
@@ -532,12 +532,12 @@ int cmd_restore(int argc, char *argv[]) {
         if (strcmp(argv[i], "--version") == 0) {
             if (i + 1 >= argc) {
                 print_error("--version requires a value");
-                return 1;
+                return EXIT_FAILURE;
             }
             long v = strtol(argv[i + 1], NULL, 10);
             if (v <= 0) {
                 print_error("Invalid version: %s (must be > 0)", argv[i + 1]);
-                return 1;
+                return EXIT_FAILURE;
             }
             target_version = (uint32_t)v;
             i++; // Skip the value
@@ -548,13 +548,13 @@ int cmd_restore(int argc, char *argv[]) {
         } else if (strcmp(argv[i], "--output") == 0 || strcmp(argv[i], "-o") == 0) {
             if (i + 1 >= argc) {
                 print_error("--output requires a value");
-                return 1;
+                return EXIT_FAILURE;
             }
             output_path = argv[i + 1];
             i++; // Skip the value
         } else {
             print_error("Unknown option: %s", argv[i]);
-            return 1;
+            return EXIT_FAILURE;
         }
     }
 
@@ -571,7 +571,7 @@ int cmd_restore(int argc, char *argv[]) {
     StorageConfig* config = storage_init("./.fiver");
     if (config == NULL) {
         print_error("Failed to initialize storage");
-        return 1;
+        return EXIT_FAILURE;
     }
 
     // Get available versions
@@ -580,7 +580,7 @@ int cmd_restore(int argc, char *argv[]) {
     if (count <= 0) {
         print_error("No versions found for: %s", filename);
         storage_free(config);
-        return 1;
+        return EXIT_FAILURE;
     }
 
     // Find the target version
@@ -604,7 +604,7 @@ int cmd_restore(int argc, char *argv[]) {
         if (!version_exists) {
             print_error("Version %u not found for: %s", target_version, filename);
             storage_free(config);
-            return 1;
+            return EXIT_FAILURE;
         }
     }
 
@@ -615,7 +615,7 @@ int cmd_restore(int argc, char *argv[]) {
     if (!force_flag && access(actual_output_path, F_OK) == 0) {
         print_error("File %s already exists. Use --force to overwrite.", actual_output_path);
         storage_free(config);
-        return 1;
+        return EXIT_FAILURE;
     }
 
     // Reconstruct the file
@@ -624,7 +624,7 @@ int cmd_restore(int argc, char *argv[]) {
     if (file_data == NULL) {
         print_error("Failed to reconstruct version %u of: %s", target_version, filename);
         storage_free(config);
-        return 1;
+        return EXIT_FAILURE;
     }
 
     // Write the file
@@ -633,7 +633,7 @@ int cmd_restore(int argc, char *argv[]) {
         print_error("Failed to create file: %s (%s)", actual_output_path, strerror(errno));
         free(file_data);
         storage_free(config);
-        return 1;
+        return EXIT_FAILURE;
     }
 
     size_t written = fwrite(file_data, 1, file_size, output_file);
@@ -643,7 +643,7 @@ int cmd_restore(int argc, char *argv[]) {
         print_error("Failed to write file: %s (wrote %zu of %u bytes)", actual_output_path, written, file_size);
         free(file_data);
         storage_free(config);
-        return 1;
+        return EXIT_FAILURE;
     }
 
     // Output result
@@ -662,14 +662,14 @@ int cmd_restore(int argc, char *argv[]) {
     // Cleanup
     free(file_data);
     storage_free(config);
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 int cmd_history(int argc, char *argv[]) {
     if (argc < 1) {
         print_error("history: missing file argument");
         printf("Usage: fiver history <file> [options]\n");
-        return 1;
+        return EXIT_FAILURE;
     }
 
     const char *filename = argv[0];
@@ -679,18 +679,18 @@ int cmd_history(int argc, char *argv[]) {
     int limit = 0; // 0 => no limit
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--format") == 0) {
-            if (i + 1 >= argc) { print_error("--format requires a value"); return 1; }
+            if (i + 1 >= argc) { print_error("--format requires a value"); return EXIT_FAILURE; }
             format = argv[i + 1];
             i++;
         } else if (strcmp(argv[i], "--limit") == 0) {
-            if (i + 1 >= argc) { print_error("--limit requires a value"); return 1; }
+            if (i + 1 >= argc) { print_error("--limit requires a value"); return EXIT_FAILURE; }
             long v = strtol(argv[i + 1], NULL, 10);
-            if (v < 0) { print_error("Invalid limit: %s", argv[i + 1]); return 1; }
+            if (v < 0) { print_error("Invalid limit: %s", argv[i + 1]); return EXIT_FAILURE; }
             limit = (int)v;
             i++;
         } else {
             print_error("Unknown option: %s", argv[i]);
-            return 1;
+            return EXIT_FAILURE;
         }
     }
 
@@ -702,7 +702,7 @@ int cmd_history(int argc, char *argv[]) {
     StorageConfig* config = storage_init("./.fiver");
     if (config == NULL) {
         print_error("Failed to initialize storage");
-        return 1;
+        return EXIT_FAILURE;
     }
 
     // Get versions
@@ -711,7 +711,7 @@ int cmd_history(int argc, char *argv[]) {
     if (count <= 0) {
         print_error("No versions found for: %s", filename);
         storage_free(config);
-        return 1;
+        return EXIT_FAILURE;
     }
 
     // Sort ascending for consistency
@@ -791,7 +791,7 @@ int cmd_history(int argc, char *argv[]) {
     }
 
     storage_free(config);
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 int cmd_list(int argc, char *argv[]) {
@@ -806,19 +806,19 @@ int cmd_list(int argc, char *argv[]) {
         if (strcmp(argv[i], "--show-sizes") == 0) {
             show_sizes = 1;
         } else if (strcmp(argv[i], "--format") == 0) {
-            if (i + 1 >= argc) { print_error("--format requires a value"); return 1; }
+            if (i + 1 >= argc) { print_error("--format requires a value"); return EXIT_FAILURE; }
             format = argv[i + 1];
             i++;
         } else {
             print_error("Unknown option: %s", argv[i]);
-            return 1;
+            return EXIT_FAILURE;
         }
     }
 
     StorageConfig* config = storage_init("./.fiver");
     if (!config) {
         print_error("Failed to initialize storage");
-        return 1;
+        return EXIT_FAILURE;
     }
 
     // Aggregate by base filename
@@ -836,7 +836,7 @@ int cmd_list(int argc, char *argv[]) {
     if (!dir) {
         print_error("Cannot open storage dir: %s", config->storage_dir);
         storage_free(config);
-        return 1;
+        return EXIT_FAILURE;
     }
 
     struct dirent *ent;
@@ -942,14 +942,14 @@ int cmd_list(int argc, char *argv[]) {
     }
 
     storage_free(config);
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 int cmd_status(int argc, char *argv[]) {
     if (argc < 1) {
         print_error("status: missing file argument");
         printf("Usage: fiver status <file> [options]\n");
-        return 1;
+        return EXIT_FAILURE;
     }
 
     const char *filename = argv[0];
@@ -961,7 +961,7 @@ int cmd_status(int argc, char *argv[]) {
             json_flag_local = 1;
         } else {
             print_error("Unknown option: %s", argv[i]);
-            return 1;
+            return EXIT_FAILURE;
         }
     }
 
@@ -973,7 +973,7 @@ int cmd_status(int argc, char *argv[]) {
     StorageConfig* config = storage_init("./.fiver");
     if (config == NULL) {
         print_error("Failed to initialize storage");
-        return 1;
+        return EXIT_FAILURE;
     }
 
     // Get versions
@@ -982,7 +982,7 @@ int cmd_status(int argc, char *argv[]) {
     if (count <= 0) {
         print_error("No versions found for: %s", filename);
         storage_free(config);
-        return 1;
+        return EXIT_FAILURE;
     }
 
     // Find latest version
@@ -1002,7 +1002,7 @@ int cmd_status(int argc, char *argv[]) {
     if (meta_file == NULL) {
         print_error("Cannot read metadata for version %u", latest_version);
         storage_free(config);
-        return 1;
+        return EXIT_FAILURE;
     }
 
     FileMetadata meta;
@@ -1011,7 +1011,7 @@ int cmd_status(int argc, char *argv[]) {
         print_error("Failed to read metadata");
         fclose(meta_file);
         storage_free(config);
-        return 1;
+        return EXIT_FAILURE;
     }
     fclose(meta_file);
 
@@ -1071,5 +1071,5 @@ int cmd_status(int argc, char *argv[]) {
     }
 
     storage_free(config);
-    return 0;
+    return EXIT_SUCCESS;
 }

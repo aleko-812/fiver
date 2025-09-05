@@ -191,5 +191,5 @@ int main() {
     test_rolling_hash_integration();
 
     printf("🎉 All tests completed successfully!\n");
-    return 0;
+    return EXIT_SUCCESS;
 }

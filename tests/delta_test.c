@@ -156,7 +156,7 @@ int main() {
     printf("3. Hash table: fast pattern matching\n");
     printf("4. FileBuffer: efficient binary data handling\n\n");
 
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 

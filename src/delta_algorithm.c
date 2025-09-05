@@ -78,7 +78,7 @@ int delta_state_add_match(DeltaState* state, uint32_t original_offset,
     state->matches[state->match_count].length = length;
     state->match_count++;
 
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 /**
@@ -99,7 +99,7 @@ int verify_match(const uint8_t* original_data, uint32_t original_size,
     // Check bounds
     if (original_offset + length > original_size ||
         new_offset + length > new_size) {
-        return 0;
+        return EXIT_SUCCESS;
     }
 
     // Compare actual bytes

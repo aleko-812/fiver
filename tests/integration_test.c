@@ -207,5 +207,5 @@ int main() {
     printf("2. Process new file with rolling hash to find matching patterns\n");
     printf("3. Use matches to create delta operations (COPY/INSERT/REPLACE)\n");
 
-    return 0;
+    return EXIT_SUCCESS;
 }
