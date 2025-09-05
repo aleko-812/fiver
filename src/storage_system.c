@@ -187,7 +187,7 @@ int save_delta(StorageConfig* config, const char* filename, uint32_t version,
     printf("Saved delta version %u for '%s' (%u operations, %u bytes)\n",
            version, filename, delta->operation_count, delta->delta_size);
 
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 /**

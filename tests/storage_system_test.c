@@ -261,5 +261,5 @@ int main() {
     printf("4. ✅ Binary file support\n");
     printf("5. ✅ Metadata and integrity checking\n");
 
-    return 0;
+    return EXIT_SUCCESS;
 }

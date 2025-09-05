@@ -171,6 +171,6 @@ int main() {
     printf("3. ✅ Delta creation algorithm for compression\n");
     printf("4. ✅ Multiple file type support (text, binary)\n");
 
-    return 0;
+    return EXIT_SUCCESS;
 }
 

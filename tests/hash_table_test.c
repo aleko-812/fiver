@@ -151,5 +151,5 @@ int main() {
   test_hash_table_find();
 
   printf("🎉 All tests completed!\n");
-  return 0;
+  return EXIT_SUCCESS;
 }
