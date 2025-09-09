@@ -40,16 +40,28 @@ debug: $(TARGET)
 release: CFLAGS += -O3 -DNDEBUG
 release: clean $(TARGET)
 
+# Format code using uncrustify
+format:
+	@echo "Formatting source files..."
+	uncrustify -c uncrustify.cfg --replace $(SOURCES) include/*.h
+
+# Check code formatting without changing files
+format-check:
+	@echo "Checking code formatting..."
+	uncrustify -c uncrustify.cfg --check $(SOURCES) include/*.h
+
 # Show help
 help:
 	@echo "Available targets:"
-	@echo "  all      - Build the fiver executable (default)"
-	@echo "  clean    - Remove build artifacts"
-	@echo "  install  - Install to /usr/local/bin/"
-	@echo "  uninstall- Remove from /usr/local/bin/"
-	@echo "  test     - Run basic CLI tests"
-	@echo "  debug    - Build with debug information"
-	@echo "  release  - Build optimized release version"
-	@echo "  help     - Show this help message"
+	@echo "  all         - Build the fiver executable (default)"
+	@echo "  clean       - Remove build artifacts"
+	@echo "  install     - Install to /usr/local/bin/"
+	@echo "  uninstall   - Remove from /usr/local/bin/"
+	@echo "  test        - Run basic CLI tests"
+	@echo "  debug       - Build with debug information"
+	@echo "  release     - Build optimized release version"
+	@echo "  format      - Format source code with uncrustify"
+	@echo "  format-check- Check code formatting without changes"
+	@echo "  help        - Show this help message"
 
-.PHONY: all clean install uninstall test debug release help
+.PHONY: all clean install uninstall test debug release format format-check help
