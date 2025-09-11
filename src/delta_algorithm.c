@@ -16,7 +16,7 @@ static int compare_matches(const void *a, const void *b)
 }
 
 // Simple match allocation - memory pool was causing issues
-static Match* match_alloc(void)
+static Match * match_alloc(void)
 {
 	return malloc(sizeof(Match));
 }
@@ -119,10 +119,10 @@ int verify_match(const uint8_t *original_data, uint32_t original_size,
  * Find the best match for a given position in the new file (optimized version)
  */
 Match * find_best_match_optimized(const uint8_t *original_data, uint32_t original_size,
-				 const uint8_t *new_data, uint32_t new_size,
-				 const HashTable *ht, uint32_t window_size,
-				 uint32_t new_pos, uint32_t min_match_length,
-				 RollingHash *rh)
+				  const uint8_t *new_data, uint32_t new_size,
+				  const HashTable *ht, uint32_t window_size,
+				  uint32_t new_pos, uint32_t min_match_length,
+				  RollingHash *rh)
 {
 	if (new_pos + window_size > new_size)
 		return NULL;
@@ -167,8 +167,8 @@ Match * find_best_match_optimized(const uint8_t *original_data, uint32_t origina
 				// Check 8 bytes at a time for even better performance
 				if (match_length + 8 <= new_size &&
 				    match_length + 8 <= original_size) {
-					uint64_t *new_chunk = (uint64_t*)(new_data + new_pos + match_length);
-					uint64_t *orig_chunk = (uint64_t*)(original_data + original_offset + match_length);
+					uint64_t *new_chunk = (uint64_t *)(new_data + new_pos + match_length);
+					uint64_t *orig_chunk = (uint64_t *)(original_data + original_offset + match_length);
 					if (*new_chunk == *orig_chunk) {
 						match_length += 8;
 						continue;
@@ -177,8 +177,8 @@ Match * find_best_match_optimized(const uint8_t *original_data, uint32_t origina
 				// Check 4 bytes at a time for better performance
 				if (match_length + 4 <= new_size &&
 				    match_length + 4 <= original_size) {
-					uint32_t *new_chunk = (uint32_t*)(new_data + new_pos + match_length);
-					uint32_t *orig_chunk = (uint32_t*)(original_data + original_offset + match_length);
+					uint32_t *new_chunk = (uint32_t *)(new_data + new_pos + match_length);
+					uint32_t *orig_chunk = (uint32_t *)(original_data + original_offset + match_length);
 					if (*new_chunk == *orig_chunk) {
 						match_length += 4;
 						continue;
@@ -186,11 +186,10 @@ Match * find_best_match_optimized(const uint8_t *original_data, uint32_t origina
 				}
 				// Fall back to byte-by-byte for remaining bytes
 				if (new_data[new_pos + match_length] ==
-				    original_data[original_offset + match_length]) {
+				    original_data[original_offset + match_length])
 					match_length++;
-				} else {
+				else
 					break;
-				}
 			}
 
 			// Only consider matches that meet minimum length
@@ -306,9 +305,8 @@ DeltaInfo * create_delta_operations(const uint8_t *original_data, uint32_t origi
 
 	// Sort matches by new_offset for processing in order
 	// Using system qsort for O(n log n) performance and stack safety
-	if (state->match_count > 1) {
+	if (state->match_count > 1)
 		qsort(state->matches, state->match_count, sizeof(Match), compare_matches);
-	}
 
 	// Convert matches to delta operations
 	uint32_t current_new_pos = 0;
@@ -472,11 +470,10 @@ DeltaInfo * delta_create(const uint8_t *original_data, uint32_t original_size,
 
 		// Find common prefix
 		for (uint32_t i = 0; i < min_size; i++) {
-			if (original_data[i] == new_data[i]) {
+			if (original_data[i] == new_data[i])
 				common_prefix++;
-			} else {
+			else
 				break;
-			}
 		}
 
 		// If most of the file is identical, use simple approach
@@ -530,11 +527,10 @@ DeltaInfo * delta_create(const uint8_t *original_data, uint32_t original_size,
 	// Find common prefix
 	uint32_t common_prefix = 0;
 	for (uint32_t i = 0; i < min_size; i++) {
-		if (original_data[i] == new_data[i]) {
+		if (original_data[i] == new_data[i])
 			common_prefix++;
-		} else {
+		else
 			break;
-		}
 	}
 	total_identical_bytes += common_prefix;
 
@@ -592,11 +588,9 @@ DeltaInfo * delta_create(const uint8_t *original_data, uint32_t original_size,
 			delta->operations[delta->operation_count].data = malloc(insert_length);
 			if (delta->operations[delta->operation_count].data == NULL) {
 				// Cleanup on error
-				for (uint32_t i = 0; i < delta->operation_count; i++) {
-					if (delta->operations[i].data != NULL) {
+				for (uint32_t i = 0; i < delta->operation_count; i++)
+					if (delta->operations[i].data != NULL)
 						free(delta->operations[i].data);
-					}
-				}
 				free(delta->operations);
 				free(delta);
 				return NULL;
@@ -700,11 +694,10 @@ DeltaInfo * delta_create(const uint8_t *original_data, uint32_t original_size,
 	uint32_t min_beneficial_match_length = 12;
 
 	// For very large files, be more aggressive about skipping small matches
-	if (new_size > 50 * 1024 * 1024) { // 50MB+
-		min_beneficial_match_length = 32; // More reasonable for large files
-	} else if (new_size > 10 * 1024 * 1024) { // 10MB+
-		min_beneficial_match_length = 16; // More reasonable for medium files
-	}
+	if (new_size > 50 * 1024 * 1024)                // 50MB+
+		min_beneficial_match_length = 32;       // More reasonable for large files
+	else if (new_size > 10 * 1024 * 1024)           // 10MB+
+		min_beneficial_match_length = 16;       // More reasonable for medium files
 	uint32_t skipped_small_matches = 0;
 
 	printf("Using minimum beneficial match length: %u bytes (file size: %u bytes)\n",
@@ -722,8 +715,8 @@ DeltaInfo * delta_create(const uint8_t *original_data, uint32_t original_size,
 
 		// Find best match starting at position i
 		Match *match = find_best_match_optimized(original_data, original_size,
-							new_data, new_size, ht, window_size,
-							i, min_match_length, match_rh);
+							 new_data, new_size, ht, window_size,
+							 i, min_match_length, match_rh);
 
 		if (match != NULL) {
 			// Cost-benefit analysis: only use matches that provide real compression benefit
@@ -804,55 +797,55 @@ DeltaInfo * delta_create(const uint8_t *original_data, uint32_t original_size,
 			uint32_t lenient_i = 0;
 			uint32_t lenient_last_match_end = 0;
 
-		while (lenient_i < new_size) {
-			// Skip positions that are already covered by previous matches
-			if (lenient_i < lenient_last_match_end) {
-				lenient_i++;
-				continue;
-			}
+			while (lenient_i < new_size) {
+				// Skip positions that are already covered by previous matches
+				if (lenient_i < lenient_last_match_end) {
+					lenient_i++;
+					continue;
+				}
 
-			// Find best match starting at position i
-			Match *match = find_best_match_optimized(original_data, original_size,
-								new_data, new_size, ht, window_size,
-								lenient_i, min_match_length, lenient_rh);
+				// Find best match starting at position i
+				Match *match = find_best_match_optimized(original_data, original_size,
+									 new_data, new_size, ht, window_size,
+									 lenient_i, min_match_length, lenient_rh);
 
-			if (match != NULL) {
-				// More lenient cost-benefit analysis
-				if (match->length >= lenient_min_beneficial) {
-					// Check if this match overlaps with the previous match
-					if (match->new_offset >= lenient_last_match_end) {
-						// Add match to state
-						if (delta_state_add_match(state, match->original_offset,
-									  match->new_offset, match->length) == 0) {
-							lenient_match_count++;
-							if (lenient_match_count <= 10) {
-								printf("  Lenient Match %u: original[%u:%u] -> new[%u:%u] (length=%u)\n",
-								       lenient_match_count, match->original_offset,
-								       match->original_offset + match->length - 1,
-								       match->new_offset, match->new_offset + match->length - 1,
-								       match->length);
+				if (match != NULL) {
+					// More lenient cost-benefit analysis
+					if (match->length >= lenient_min_beneficial) {
+						// Check if this match overlaps with the previous match
+						if (match->new_offset >= lenient_last_match_end) {
+							// Add match to state
+							if (delta_state_add_match(state, match->original_offset,
+										  match->new_offset, match->length) == 0) {
+								lenient_match_count++;
+								if (lenient_match_count <= 10) {
+									printf("  Lenient Match %u: original[%u:%u] -> new[%u:%u] (length=%u)\n",
+									       lenient_match_count, match->original_offset,
+									       match->original_offset + match->length - 1,
+									       match->new_offset, match->new_offset + match->length - 1,
+									       match->length);
+								}
 							}
-						}
 
-						// Update last match end and skip ahead by match length
-						lenient_last_match_end = match->new_offset + match->length;
-						lenient_i += match->length;
+							// Update last match end and skip ahead by match length
+							lenient_last_match_end = match->new_offset + match->length;
+							lenient_i += match->length;
+						} else {
+							// Match overlaps with previous match, skip it
+							lenient_skipped++;
+							lenient_i++;
+						}
 					} else {
-						// Match overlaps with previous match, skip it
+						// Skip small matches that don't provide compression benefit
 						lenient_skipped++;
 						lenient_i++;
 					}
+					free(match);
 				} else {
-					// Skip small matches that don't provide compression benefit
-					lenient_skipped++;
+					// No match found, move forward by 1 byte
 					lenient_i++;
 				}
-				free(match);
-			} else {
-				// No match found, move forward by 1 byte
-				lenient_i++;
 			}
-		}
 
 			printf("Lenient approach found %u matches, skipped %u small\n",
 			       lenient_match_count, lenient_skipped);

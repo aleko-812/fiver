@@ -62,9 +62,9 @@ typedef struct {
 
 // Match structure for delta algorithm
 typedef struct {
-	uint32_t	original_offset; // Offset in original file
-	uint32_t	new_offset;      // Offset in new file
-	uint32_t	length;          // Length of match
+	uint32_t	original_offset;        // Offset in original file
+	uint32_t	new_offset;             // Offset in new file
+	uint32_t	length;                 // Length of match
 } Match;
 
 // Delta state for tracking matches during creation
