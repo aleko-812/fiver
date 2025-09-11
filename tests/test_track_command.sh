@@ -87,7 +87,7 @@ check_file_exists() {
 # Function to cleanup test files
 cleanup() {
     echo -e "${YELLOW}Cleaning up test files...${NC}"
-    rm -f test_file.txt empty_file.txt test_binary.bin large_test_file.bin file1.txt file2.txt "test file with spaces.txt" message_test.txt list1.txt list2.txt status_test.txt delta_test1.txt delta_test2.txt original_size_test.txt restore_test.txt output_test_v1.txt output_test_v2.txt output_test_json.txt existing_output.txt diff_test.txt hist.txt
+    rm -f test_file.txt empty_file.txt test_binary.bin large_test_file.bin file1.txt file2.txt "test file with spaces.txt" message_test.txt list1.txt list2.txt status_test.txt delta_test1.txt delta_test2.txt original_size_test.txt restore_test.txt output_test_v1.txt output_test_v2.txt output_test_json.txt existing_output.txt diff_test.txt hist.txt small_delta_test.txt
     rm -rf .fiver
     echo "Cleanup complete"
     echo ""
@@ -445,6 +445,19 @@ run_test_with_output "Output to existing file" "./fiver restore restore_test.txt
 
 # Test 78: Verify existing file was overwritten
 run_test_with_output "Verify existing file overwritten" "cat existing_output.txt" 0 "Restore test v1"
+
+# Small delta tests for end-of-file changes
+# Test 79: Small change at end of file should produce small delta
+echo "This is a test file with some content that we will modify at the end" > small_delta_test.txt
+run_test_with_output "Track file for small delta test" "./fiver track small_delta_test.txt" 0 "Tracked small_delta_test.txt"
+echo "This is a test file with some content that we will modify at the end - modified!" >> small_delta_test.txt
+run_test_with_output "Small end-of-file change" "./fiver track small_delta_test.txt" 0 "Detected small change"
+run_test_with_output "Small delta size verification" "./fiver diff small_delta_test.txt --version 2" 0 "Operation count: 2"
+
+# Test 80: Multiple small changes at end should still produce small delta
+echo "Another small addition" >> small_delta_test.txt
+run_test_with_output "Second small end-of-file change" "./fiver track small_delta_test.txt" 0 "Detected small change"
+run_test_with_output "Second small delta verification" "./fiver diff small_delta_test.txt --version 3" 0 "Operation count: 2"
 
 # Test 26: Track with message flag
 echo "test content" > message_test.txt

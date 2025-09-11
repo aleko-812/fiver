@@ -145,9 +145,9 @@ Match * find_best_match_optimized(const uint8_t *original_data, uint32_t origina
 	Match *best_match = NULL;
 	uint32_t best_length = 0;
 
-	// Check all matches with this hash (with early termination)
+	// Check all matches with this hash (simplified approach)
 	HashEntry *current = match_entry;
-	uint32_t max_candidates = 10; // Limit hash collision checking for performance
+	uint32_t max_candidates = 20; // Allow more candidates for better matches
 	uint32_t candidates_checked = 0;
 
 	while (current != NULL && candidates_checked < max_candidates) {
@@ -159,8 +159,11 @@ Match * find_best_match_optimized(const uint8_t *original_data, uint32_t origina
 			uint32_t match_length = window_size;
 
 			// Extend forward as long as bytes match (optimized with larger strides)
+			// Limit maximum match size to prevent extremely long matches
+			uint32_t max_match_size = 1024 * 1024; // 1MB maximum match size
 			while (new_pos + match_length < new_size &&
-			       original_offset + match_length < original_size) {
+			       original_offset + match_length < original_size &&
+			       match_length < max_match_size) {
 				// Check 8 bytes at a time for even better performance
 				if (match_length + 8 <= new_size &&
 				    match_length + 8 <= original_size) {
@@ -192,7 +195,7 @@ Match * find_best_match_optimized(const uint8_t *original_data, uint32_t origina
 
 			// Only consider matches that meet minimum length
 			if (match_length >= min_match_length && match_length > best_length) {
-				// Skip expensive verification for now - the match extension is already verified
+				// Simple approach: just take the longest match
 				best_length = match_length;
 
 				// Create or update best match
@@ -461,9 +464,164 @@ DeltaInfo * delta_create(const uint8_t *original_data, uint32_t original_size,
 	if (original_data == NULL || new_data == NULL)
 		return NULL;
 
-	// Algorithm parameters
+	// For small changes, use a simple approach
+	if (new_size > original_size && (new_size - original_size) < 1000) {
+		// Small addition - check if it's just appended data
+		uint32_t common_prefix = 0;
+		uint32_t min_size = (original_size < new_size) ? original_size : new_size;
+
+		// Find common prefix
+		for (uint32_t i = 0; i < min_size; i++) {
+			if (original_data[i] == new_data[i]) {
+				common_prefix++;
+			} else {
+				break;
+			}
+		}
+
+		// If most of the file is identical, use simple approach
+		if (common_prefix > original_size * 0.95) { // 95% identical
+			printf("Detected small change (%.1f%% identical) - using simple approach\n",
+			       (common_prefix * 100.0) / original_size);
+
+			DeltaInfo *delta = malloc(sizeof(DeltaInfo));
+			if (delta == NULL) return NULL;
+
+			delta->original_size = original_size;
+			delta->new_size = new_size;
+			delta->operation_count = 2; // COPY + INSERT
+			delta->delta_size = new_size - common_prefix;
+
+			delta->operations = malloc(2 * sizeof(DeltaOperation));
+			if (delta->operations == NULL) {
+				free(delta);
+				return NULL;
+			}
+
+			// COPY operation for the common prefix
+			delta->operations[0].type = DELTA_COPY;
+			delta->operations[0].offset = 0;
+			delta->operations[0].length = common_prefix;
+			delta->operations[0].data = NULL;
+
+			// INSERT operation for the new data
+			uint32_t insert_length = new_size - common_prefix;
+			delta->operations[1].type = DELTA_INSERT;
+			delta->operations[1].offset = 0;
+			delta->operations[1].length = insert_length;
+			delta->operations[1].data = malloc(insert_length);
+			if (delta->operations[1].data == NULL) {
+				free(delta->operations);
+				free(delta);
+				return NULL;
+			}
+			memcpy(delta->operations[1].data, new_data + common_prefix, insert_length);
+
+			printf("Simple delta: COPY %u bytes + INSERT %u bytes\n", common_prefix, insert_length);
+			return delta;
+		}
+	}
+
+	// For any file, try to find large matching chunks to avoid huge deltas
+	// This handles changes in the middle of files
+	uint32_t total_identical_bytes = 0;
+	uint32_t min_size = (original_size < new_size) ? original_size : new_size;
+
+	// Find common prefix
+	uint32_t common_prefix = 0;
+	for (uint32_t i = 0; i < min_size; i++) {
+		if (original_data[i] == new_data[i]) {
+			common_prefix++;
+		} else {
+			break;
+		}
+	}
+	total_identical_bytes += common_prefix;
+
+	// Find common suffix (from the end)
+	uint32_t common_suffix = 0;
+	uint32_t orig_end = original_size;
+	uint32_t new_end = new_size;
+	while (orig_end > common_prefix && new_end > common_prefix &&
+	       original_data[orig_end - 1] == new_data[new_end - 1]) {
+		common_suffix++;
+		orig_end--;
+		new_end--;
+	}
+	total_identical_bytes += common_suffix;
+
+	// If we have a large amount of identical content, use chunk-based approach
+	if (total_identical_bytes > original_size * 0.8) { // 80% identical
+		printf("Detected large matching chunks (%.1f%% identical) - using chunk-based approach\n",
+		       (total_identical_bytes * 100.0) / original_size);
+
+		DeltaInfo *delta = malloc(sizeof(DeltaInfo));
+		if (delta == NULL) return NULL;
+
+		delta->original_size = original_size;
+		delta->new_size = new_size;
+		delta->operation_count = 0;
+		delta->delta_size = 0;
+		delta->operations = NULL;
+
+		// Allocate operations array (we'll need at most 4 operations: COPY + INSERT + COPY)
+		uint32_t operations_capacity = 4;
+		delta->operations = malloc(operations_capacity * sizeof(DeltaOperation));
+		if (delta->operations == NULL) {
+			free(delta);
+			return NULL;
+		}
+
+		// COPY operation for the common prefix
+		if (common_prefix > 0) {
+			delta->operations[delta->operation_count].type = DELTA_COPY;
+			delta->operations[delta->operation_count].offset = 0;
+			delta->operations[delta->operation_count].length = common_prefix;
+			delta->operations[delta->operation_count].data = NULL;
+			delta->operation_count++;
+		}
+
+		// INSERT operation for the middle part (if any)
+		uint32_t middle_start = common_prefix;
+		uint32_t middle_end = new_size - common_suffix;
+		if (middle_start < middle_end) {
+			uint32_t insert_length = middle_end - middle_start;
+			delta->operations[delta->operation_count].type = DELTA_INSERT;
+			delta->operations[delta->operation_count].offset = 0;
+			delta->operations[delta->operation_count].length = insert_length;
+			delta->operations[delta->operation_count].data = malloc(insert_length);
+			if (delta->operations[delta->operation_count].data == NULL) {
+				// Cleanup on error
+				for (uint32_t i = 0; i < delta->operation_count; i++) {
+					if (delta->operations[i].data != NULL) {
+						free(delta->operations[i].data);
+					}
+				}
+				free(delta->operations);
+				free(delta);
+				return NULL;
+			}
+			memcpy(delta->operations[delta->operation_count].data, new_data + middle_start, insert_length);
+			delta->delta_size += insert_length;
+			delta->operation_count++;
+		}
+
+		// COPY operation for the common suffix
+		if (common_suffix > 0) {
+			delta->operations[delta->operation_count].type = DELTA_COPY;
+			delta->operations[delta->operation_count].offset = original_size - common_suffix;
+			delta->operations[delta->operation_count].length = common_suffix;
+			delta->operations[delta->operation_count].data = NULL;
+			delta->operation_count++;
+		}
+
+		printf("Chunk-based delta: %u operations, %u bytes\n", delta->operation_count, delta->delta_size);
+		return delta;
+	}
+
+	// Algorithm parameters for complex changes
 	uint32_t window_size = 32;      // Sliding window size (increased for better performance)
-	uint32_t min_match_length = 32; // Minimum match length to consider
+	uint32_t min_match_length = 32; // Minimum match length to consider (increased to reduce noise)
 	uint32_t bucket_count = 65536;  // Hash table size (increased for better distribution)
 
 	printf("Creating delta...\n");
@@ -543,9 +701,9 @@ DeltaInfo * delta_create(const uint8_t *original_data, uint32_t original_size,
 
 	// For very large files, be more aggressive about skipping small matches
 	if (new_size > 50 * 1024 * 1024) { // 50MB+
-		min_beneficial_match_length = 16; // Require longer matches for large files
+		min_beneficial_match_length = 32; // More reasonable for large files
 	} else if (new_size > 10 * 1024 * 1024) { // 10MB+
-		min_beneficial_match_length = 14;
+		min_beneficial_match_length = 16; // More reasonable for medium files
 	}
 	uint32_t skipped_small_matches = 0;
 
@@ -553,7 +711,15 @@ DeltaInfo * delta_create(const uint8_t *original_data, uint32_t original_size,
 	       min_beneficial_match_length, new_size);
 
 	// Process new file with sliding window
-	for (uint32_t i = 0; i < new_size; i++) {
+	uint32_t i = 0;
+	uint32_t last_match_end = 0; // Track the end of the last match to prevent overlaps
+	while (i < new_size) {
+		// Skip positions that are already covered by previous matches
+		if (i < last_match_end) {
+			i++;
+			continue;
+		}
+
 		// Find best match starting at position i
 		Match *match = find_best_match_optimized(original_data, original_size,
 							new_data, new_size, ht, window_size,
@@ -562,27 +728,39 @@ DeltaInfo * delta_create(const uint8_t *original_data, uint32_t original_size,
 		if (match != NULL) {
 			// Cost-benefit analysis: only use matches that provide real compression benefit
 			if (match->length >= min_beneficial_match_length) {
-				// Add match to state
-				if (delta_state_add_match(state, match->original_offset,
-							  match->new_offset, match->length) == 0) {
-					match_count++;
-					if (match_count <= 10) { // Only show first 10 matches to avoid spam
-						printf("  Match %u: original[%u:%u] -> new[%u:%u] (length=%u)\n",
-						       match_count, match->original_offset,
-						       match->original_offset + match->length - 1,
-						       match->new_offset, match->new_offset + match->length - 1,
-						       match->length);
+				// Check if this match overlaps with the previous match
+				if (match->new_offset >= last_match_end) {
+					// Add match to state
+					if (delta_state_add_match(state, match->original_offset,
+								  match->new_offset, match->length) == 0) {
+						match_count++;
+						if (match_count <= 10) { // Only show first 10 matches to avoid spam
+							printf("  Match %u: original[%u:%u] -> new[%u:%u] (length=%u)\n",
+							       match_count, match->original_offset,
+							       match->original_offset + match->length - 1,
+							       match->new_offset, match->new_offset + match->length - 1,
+							       match->length);
+						}
 					}
-				}
 
-				// Skip ahead by match length
-				i += match->length - 1; // -1 because loop will increment i
+					// Update last match end and skip ahead by match length
+					last_match_end = match->new_offset + match->length;
+					i += match->length;
+				} else {
+					// Match overlaps with previous match, skip it
+					skipped_small_matches++;
+					i++;
+				}
 			} else {
 				// Skip small matches that don't provide compression benefit
 				skipped_small_matches++;
-				// Don't skip ahead - let the algorithm treat this as an insert
+				// Move forward by 1 byte for small matches
+				i++;
 			}
 			free(match);
+		} else {
+			// No match found, move forward by 1 byte
+			i++;
 		}
 
 		// Progress reporting
@@ -602,6 +780,92 @@ DeltaInfo * delta_create(const uint8_t *original_data, uint32_t original_size,
 
 	printf("Match finding completed - Used %u beneficial matches, skipped %u small matches\n",
 	       match_count, skipped_small_matches);
+
+	// If we have very few matches, try a more lenient approach
+	if (match_count < 10 && new_size > 1024 * 1024) { // Less than 10 matches for files > 1MB
+		printf("Too few matches found, trying more lenient approach...\n");
+
+		// Reset and try again with more lenient parameters
+		delta_state_free(state);
+		state = delta_state_new(1000);
+
+		// Create a new rolling hash for the lenient approach
+		RollingHash *lenient_rh = rolling_hash_new(window_size);
+		if (lenient_rh == NULL) {
+			printf("Failed to create rolling hash for lenient approach\n");
+			// Continue with original state
+		} else {
+			// Try again with lower minimum beneficial match length
+			uint32_t lenient_min_beneficial = 32; // More lenient
+			uint32_t lenient_match_count = 0;
+			uint32_t lenient_skipped = 0;
+
+			// Process new file with more lenient parameters
+			uint32_t lenient_i = 0;
+			uint32_t lenient_last_match_end = 0;
+
+		while (lenient_i < new_size) {
+			// Skip positions that are already covered by previous matches
+			if (lenient_i < lenient_last_match_end) {
+				lenient_i++;
+				continue;
+			}
+
+			// Find best match starting at position i
+			Match *match = find_best_match_optimized(original_data, original_size,
+								new_data, new_size, ht, window_size,
+								lenient_i, min_match_length, lenient_rh);
+
+			if (match != NULL) {
+				// More lenient cost-benefit analysis
+				if (match->length >= lenient_min_beneficial) {
+					// Check if this match overlaps with the previous match
+					if (match->new_offset >= lenient_last_match_end) {
+						// Add match to state
+						if (delta_state_add_match(state, match->original_offset,
+									  match->new_offset, match->length) == 0) {
+							lenient_match_count++;
+							if (lenient_match_count <= 10) {
+								printf("  Lenient Match %u: original[%u:%u] -> new[%u:%u] (length=%u)\n",
+								       lenient_match_count, match->original_offset,
+								       match->original_offset + match->length - 1,
+								       match->new_offset, match->new_offset + match->length - 1,
+								       match->length);
+							}
+						}
+
+						// Update last match end and skip ahead by match length
+						lenient_last_match_end = match->new_offset + match->length;
+						lenient_i += match->length;
+					} else {
+						// Match overlaps with previous match, skip it
+						lenient_skipped++;
+						lenient_i++;
+					}
+				} else {
+					// Skip small matches that don't provide compression benefit
+					lenient_skipped++;
+					lenient_i++;
+				}
+				free(match);
+			} else {
+				// No match found, move forward by 1 byte
+				lenient_i++;
+			}
+		}
+
+			printf("Lenient approach found %u matches, skipped %u small\n",
+			       lenient_match_count, lenient_skipped);
+
+			// Use the lenient results if they're better
+			if (lenient_match_count > match_count) {
+				match_count = lenient_match_count;
+				skipped_small_matches = lenient_skipped;
+			}
+
+			rolling_hash_free(lenient_rh);
+		}
+	}
 
 	// Step 3: Create delta operations
 	printf("Creating delta operations...\n");
