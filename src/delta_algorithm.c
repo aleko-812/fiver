@@ -4,43 +4,15 @@
 #include <stdint.h>
 #include "delta_structures.h"
 
-// Quicksort implementation for matches
-static void quicksort_matches(Match *matches, int32_t low, int32_t high);
-static int32_t partition_matches(Match *matches, int32_t low, int32_t high);
-
-static void quicksort_matches(Match *matches, int32_t low, int32_t high)
+// Comparison function for qsort
+static int compare_matches(const void *a, const void *b)
 {
-	if (low < high) {
-		// Partition the array
-		int32_t pivot_index = partition_matches(matches, low, high);
+	const Match *match_a = (const Match *)a;
+	const Match *match_b = (const Match *)b;
 
-		// Recursively sort elements before and after partition
-		quicksort_matches(matches, low, pivot_index - 1);
-		quicksort_matches(matches, pivot_index + 1, high);
-	}
-}
-
-static int32_t partition_matches(Match *matches, int32_t low, int32_t high)
-{
-	uint32_t pivot = matches[high].new_offset;
-	int32_t i = low - 1;
-
-	for (int32_t j = low; j < high; j++) {
-		if (matches[j].new_offset <= pivot) {
-			i++;
-			// Swap matches[i] and matches[j]
-			Match temp = matches[i];
-			matches[i] = matches[j];
-			matches[j] = temp;
-		}
-	}
-
-	// Swap matches[i+1] and matches[high] (pivot)
-	Match temp = matches[i + 1];
-	matches[i + 1] = matches[high];
-	matches[high] = temp;
-
-	return i + 1;
+	if (match_a->new_offset < match_b->new_offset) return -1;
+	if (match_a->new_offset > match_b->new_offset) return 1;
+	return 0;
 }
 
 // Simple match allocation - memory pool was causing issues
@@ -330,10 +302,9 @@ DeltaInfo * create_delta_operations(const uint8_t *original_data, uint32_t origi
 	delta->delta_size = 0;
 
 	// Sort matches by new_offset for processing in order
-	// Using quicksort for O(n log n) performance instead of O(n²) bubble sort
+	// Using system qsort for O(n log n) performance and stack safety
 	if (state->match_count > 1) {
-		// Simple quicksort implementation
-		quicksort_matches(state->matches, 0, state->match_count - 1);
+		qsort(state->matches, state->match_count, sizeof(Match), compare_matches);
 	}
 
 	// Convert matches to delta operations
