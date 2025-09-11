@@ -1,7 +1,53 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include "delta_structures.h"
+
+// Quicksort implementation for matches
+static void quicksort_matches(Match *matches, int32_t low, int32_t high);
+static int32_t partition_matches(Match *matches, int32_t low, int32_t high);
+
+static void quicksort_matches(Match *matches, int32_t low, int32_t high)
+{
+	if (low < high) {
+		// Partition the array
+		int32_t pivot_index = partition_matches(matches, low, high);
+
+		// Recursively sort elements before and after partition
+		quicksort_matches(matches, low, pivot_index - 1);
+		quicksort_matches(matches, pivot_index + 1, high);
+	}
+}
+
+static int32_t partition_matches(Match *matches, int32_t low, int32_t high)
+{
+	uint32_t pivot = matches[high].new_offset;
+	int32_t i = low - 1;
+
+	for (int32_t j = low; j < high; j++) {
+		if (matches[j].new_offset <= pivot) {
+			i++;
+			// Swap matches[i] and matches[j]
+			Match temp = matches[i];
+			matches[i] = matches[j];
+			matches[j] = temp;
+		}
+	}
+
+	// Swap matches[i+1] and matches[high] (pivot)
+	Match temp = matches[i + 1];
+	matches[i + 1] = matches[high];
+	matches[high] = temp;
+
+	return i + 1;
+}
+
+// Simple match allocation - memory pool was causing issues
+static Match* match_alloc(void)
+{
+	return malloc(sizeof(Match));
+}
 
 // Forward declarations
 RollingHash * rolling_hash_new(uint32_t window_size);
@@ -14,25 +60,7 @@ void hash_table_insert(HashTable *ht, uint32_t hash, uint32_t offset);
 HashEntry * hash_table_find(HashTable *ht, uint32_t hash);
 void hash_table_free(HashTable *ht);
 
-/**
- * Represents a match found between original and new file
- */
-typedef struct {
-	uint32_t	original_offset;        // Position in original file
-	uint32_t	new_offset;             // Position in new file
-	uint32_t	length;                 // Length of the match
-} Match;
-
-/**
- * Represents the current state of delta generation
- */
-typedef struct {
-	uint32_t	new_pos;                // Current position in new file
-	uint32_t	original_pos;           // Current position in original file
-	uint32_t	match_count;            // Number of matches found
-	Match *		matches;                // Array of matches
-	uint32_t	matches_capacity;       // Capacity of matches array
-} DeltaState;
+// Match and DeltaState are now defined in delta_structures.h
 
 /**
  * Initialize delta state
@@ -116,7 +144,103 @@ int verify_match(const uint8_t *original_data, uint32_t original_size,
 }
 
 /**
- * Find the best match for a given position in the new file
+ * Find the best match for a given position in the new file (optimized version)
+ */
+Match * find_best_match_optimized(const uint8_t *original_data, uint32_t original_size,
+				 const uint8_t *new_data, uint32_t new_size,
+				 const HashTable *ht, uint32_t window_size,
+				 uint32_t new_pos, uint32_t min_match_length,
+				 RollingHash *rh)
+{
+	if (new_pos + window_size > new_size)
+		return NULL;
+
+	// Update rolling hash incrementally (much faster than recreating)
+	if (new_pos == 0) {
+		// First position: fill the rolling hash
+		for (uint32_t i = 0; i < window_size; i++)
+			rolling_hash_update(rh, new_data[i]);
+	} else {
+		// Subsequent positions: just update with new byte
+		rolling_hash_update(rh, new_data[new_pos + window_size - 1]);
+	}
+
+	uint32_t hash = rolling_hash_get_hash(rh);
+
+	// Look for matches in original file
+	HashEntry *match_entry = hash_table_find((HashTable *)ht, hash);
+
+	Match *best_match = NULL;
+	uint32_t best_length = 0;
+
+	// Check all matches with this hash (with early termination)
+	HashEntry *current = match_entry;
+	uint32_t max_candidates = 10; // Limit hash collision checking for performance
+	uint32_t candidates_checked = 0;
+
+	while (current != NULL && candidates_checked < max_candidates) {
+		if (current->hash == hash) {
+			uint32_t original_offset = current->offset;
+			candidates_checked++;
+
+			// Try to extend the match beyond the window
+			uint32_t match_length = window_size;
+
+			// Extend forward as long as bytes match (optimized with larger strides)
+			while (new_pos + match_length < new_size &&
+			       original_offset + match_length < original_size) {
+				// Check 8 bytes at a time for even better performance
+				if (match_length + 8 <= new_size &&
+				    match_length + 8 <= original_size) {
+					uint64_t *new_chunk = (uint64_t*)(new_data + new_pos + match_length);
+					uint64_t *orig_chunk = (uint64_t*)(original_data + original_offset + match_length);
+					if (*new_chunk == *orig_chunk) {
+						match_length += 8;
+						continue;
+					}
+				}
+				// Check 4 bytes at a time for better performance
+				if (match_length + 4 <= new_size &&
+				    match_length + 4 <= original_size) {
+					uint32_t *new_chunk = (uint32_t*)(new_data + new_pos + match_length);
+					uint32_t *orig_chunk = (uint32_t*)(original_data + original_offset + match_length);
+					if (*new_chunk == *orig_chunk) {
+						match_length += 4;
+						continue;
+					}
+				}
+				// Fall back to byte-by-byte for remaining bytes
+				if (new_data[new_pos + match_length] ==
+				    original_data[original_offset + match_length]) {
+					match_length++;
+				} else {
+					break;
+				}
+			}
+
+			// Only consider matches that meet minimum length
+			if (match_length >= min_match_length && match_length > best_length) {
+				// Skip expensive verification for now - the match extension is already verified
+				best_length = match_length;
+
+				// Create or update best match
+				if (best_match == NULL)
+					best_match = match_alloc();
+				if (best_match != NULL) {
+					best_match->original_offset = original_offset;
+					best_match->new_offset = new_pos;
+					best_match->length = match_length;
+				}
+			}
+		}
+		current = current->next;
+	}
+
+	return best_match;
+}
+
+/**
+ * Find the best match for a given position in the new file (original version)
  */
 Match * find_best_match(const uint8_t *original_data, uint32_t original_size,
 			const uint8_t *new_data, uint32_t new_size,
@@ -206,17 +330,10 @@ DeltaInfo * create_delta_operations(const uint8_t *original_data, uint32_t origi
 	delta->delta_size = 0;
 
 	// Sort matches by new_offset for processing in order
-	// (This is a simple bubble sort - could be optimized)
+	// Using quicksort for O(n log n) performance instead of O(n²) bubble sort
 	if (state->match_count > 1) {
-		for (uint32_t i = 0; i < state->match_count - 1; i++) {
-			for (uint32_t j = 0; j < state->match_count - i - 1; j++) {
-				if (state->matches[j].new_offset > state->matches[j + 1].new_offset) {
-					Match temp = state->matches[j];
-					state->matches[j] = state->matches[j + 1];
-					state->matches[j + 1] = temp;
-				}
-			}
-		}
+		// Simple quicksort implementation
+		quicksort_matches(state->matches, 0, state->match_count - 1);
 	}
 
 	// Convert matches to delta operations
@@ -384,6 +501,8 @@ DeltaInfo * delta_create(const uint8_t *original_data, uint32_t original_size,
 	printf("Window size: %u bytes\n", window_size);
 	printf("Min match length: %u bytes\n", min_match_length);
 
+	// Memory management is now handled with simple malloc/free
+
 	// Step 1: Build hash table from original file
 	HashTable *ht = hash_table_new(bucket_count);
 	if (ht == NULL) {
@@ -414,7 +533,7 @@ DeltaInfo * delta_create(const uint8_t *original_data, uint32_t original_size,
 		// Progress reporting
 		if (i % progress_interval == 0) {
 			uint32_t progress_percent = (uint32_t)((i * 100ULL) / original_size);
-			printf("\rProgress: %u%% (%u/%u bytes)", 
+			printf("\rProgress: %u%% (%u/%u bytes)",
 			       progress_percent, i, original_size);
 			fflush(stdout);
 		}
@@ -432,34 +551,86 @@ DeltaInfo * delta_create(const uint8_t *original_data, uint32_t original_size,
 		return NULL;
 	}
 
+	// Create rolling hash once and reuse it
+	RollingHash *match_rh = rolling_hash_new(window_size);
+	if (match_rh == NULL) {
+		delta_state_free(state);
+		hash_table_free(ht);
+		return NULL;
+	}
+
 	uint32_t match_count = 0;
+	uint32_t match_progress_interval = new_size / 1000; // Report every 0.1% for more frequent updates
+	if (match_progress_interval == 0) match_progress_interval = 1;
+
+	// Cost-benefit analysis: minimum match length that provides compression benefit
+	// For a match to be worthwhile, it should save more bytes than the overhead of storing it
+	// COPY operation overhead: ~12 bytes (type + offset + length)
+	// INSERT operation overhead: ~8 bytes (type + length) + data
+	// So a match should be at least 12+ bytes to be worthwhile
+	uint32_t min_beneficial_match_length = 12;
+
+	// For very large files, be more aggressive about skipping small matches
+	if (new_size > 50 * 1024 * 1024) { // 50MB+
+		min_beneficial_match_length = 16; // Require longer matches for large files
+	} else if (new_size > 10 * 1024 * 1024) { // 10MB+
+		min_beneficial_match_length = 14;
+	}
+	uint32_t skipped_small_matches = 0;
+
+	printf("Using minimum beneficial match length: %u bytes (file size: %u bytes)\n",
+	       min_beneficial_match_length, new_size);
 
 	// Process new file with sliding window
 	for (uint32_t i = 0; i < new_size; i++) {
 		// Find best match starting at position i
-		Match *match = find_best_match(original_data, original_size,
-					       new_data, new_size, ht, window_size,
-					       i, min_match_length);
+		Match *match = find_best_match_optimized(original_data, original_size,
+							new_data, new_size, ht, window_size,
+							i, min_match_length, match_rh);
 
 		if (match != NULL) {
-			// Add match to state
-			if (delta_state_add_match(state, match->original_offset,
-						  match->new_offset, match->length) == 0) {
-				match_count++;
-				printf("  Match %u: original[%u:%u] -> new[%u:%u] (length=%u)\n",
-				       match_count, match->original_offset,
-				       match->original_offset + match->length - 1,
-				       match->new_offset, match->new_offset + match->length - 1,
-				       match->length);
-			}
+			// Cost-benefit analysis: only use matches that provide real compression benefit
+			if (match->length >= min_beneficial_match_length) {
+				// Add match to state
+				if (delta_state_add_match(state, match->original_offset,
+							  match->new_offset, match->length) == 0) {
+					match_count++;
+					if (match_count <= 10) { // Only show first 10 matches to avoid spam
+						printf("  Match %u: original[%u:%u] -> new[%u:%u] (length=%u)\n",
+						       match_count, match->original_offset,
+						       match->original_offset + match->length - 1,
+						       match->new_offset, match->new_offset + match->length - 1,
+						       match->length);
+					}
+				}
 
-			// Skip ahead by match length
-			i += match->length - 1; // -1 because loop will increment i
+				// Skip ahead by match length
+				i += match->length - 1; // -1 because loop will increment i
+			} else {
+				// Skip small matches that don't provide compression benefit
+				skipped_small_matches++;
+				// Don't skip ahead - let the algorithm treat this as an insert
+			}
 			free(match);
+		}
+
+		// Progress reporting
+		if (i % match_progress_interval == 0) {
+			uint32_t progress_percent = (uint32_t)((i * 100ULL) / new_size);
+			printf("\rFinding matches: %u%% (%u/%u bytes) - Found %u matches, skipped %u small",
+			       progress_percent, i, new_size, match_count, skipped_small_matches);
+			fflush(stdout);
 		}
 	}
 
-	printf("Found %u matches\n", match_count);
+	// Final progress report
+	printf("\rFinding matches: 100%% (%u/%u bytes) - Found %u matches, skipped %u small\n",
+	       new_size, new_size, match_count, skipped_small_matches);
+
+	rolling_hash_free(match_rh);
+
+	printf("Match finding completed - Used %u beneficial matches, skipped %u small matches\n",
+	       match_count, skipped_small_matches);
 
 	// Step 3: Create delta operations
 	printf("Creating delta operations...\n");

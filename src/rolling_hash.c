@@ -43,17 +43,22 @@ void rolling_hash_update(RollingHash *rh, uint8_t byte)
 	// Update position (circular buffer)
 	rh->window_pos = (rh->window_pos + 1) % rh->window_size;
 
-	// Update hash values
+	// Update hash values using bit operations instead of modulo for speed
 	if (rh->bytes_in_window < rh->window_size) {
 		// Window not full yet, just add new byte
-		rh->a = (rh->a + byte) % 65521;         // MOD_A = 65521 (largest prime < 2^16)
-		rh->b = (rh->b + rh->a) % 65521;        // MOD_B = 65521
+		rh->a += byte;
+		rh->b += rh->a;
 		rh->bytes_in_window++;
 	} else {
 		// Window is full, remove old byte and add new byte
-		rh->a = (rh->a - old_byte + byte) % 65521;
-		rh->b = (rh->b - rh->window_size * old_byte + rh->a) % 65521;
+		rh->a = rh->a - old_byte + byte;
+		rh->b = rh->b - rh->window_size * old_byte + rh->a;
 	}
+
+	// Use bit masking instead of modulo for better performance
+	// Keep values in reasonable range to prevent overflow
+	if (rh->a > 0xFFFF) rh->a &= 0xFFFF;
+	if (rh->b > 0xFFFF) rh->b &= 0xFFFF;
 }
 
 uint32_t rolling_hash_get_hash(RollingHash *rh)

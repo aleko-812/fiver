@@ -60,6 +60,22 @@ typedef struct {
 	uint32_t	entry_count;    // Total number of entries
 } HashTable;
 
+// Match structure for delta algorithm
+typedef struct {
+	uint32_t	original_offset; // Offset in original file
+	uint32_t	new_offset;      // Offset in new file
+	uint32_t	length;          // Length of match
+} Match;
+
+// Delta state for tracking matches during creation
+typedef struct {
+	uint32_t	new_pos;                // Current position in new file
+	uint32_t	original_pos;           // Current position in original file
+	uint32_t	match_count;            // Number of matches found
+	Match *		matches;                // Array of matches
+	uint32_t	matches_capacity;       // Capacity of matches array
+} DeltaState;
+
 // ============================================================================
 // File Buffer (reusing from your exercises)
 // ============================================================================
@@ -90,6 +106,11 @@ HashTable * hash_table_new(uint32_t bucket_count);
 void hash_table_insert(HashTable *ht, uint32_t hash, uint32_t offset);
 HashEntry * hash_table_find(HashTable *ht, uint32_t hash);
 void hash_table_free(HashTable *ht);
+
+// Delta state functions
+DeltaState * delta_state_new(uint32_t initial_capacity);
+int delta_state_add_match(DeltaState *state, uint32_t original_offset, uint32_t new_offset, uint32_t length);
+void delta_state_free(DeltaState *state);
 
 // File buffer functions (from your exercises)
 FileBuffer * file_buffer_new(size_t initial_capacity);
