@@ -374,9 +374,9 @@ DeltaInfo * delta_create(const uint8_t *original_data, uint32_t original_size,
 		return NULL;
 
 	// Algorithm parameters
-	uint32_t window_size = 8;       // Sliding window size
-	uint32_t min_match_length = 8;  // Minimum match length to consider
-	uint32_t bucket_count = 1024;   // Hash table size
+	uint32_t window_size = 32;      // Sliding window size (increased for better performance)
+	uint32_t min_match_length = 32; // Minimum match length to consider
+	uint32_t bucket_count = 65536;  // Hash table size (increased for better distribution)
 
 	printf("Creating delta...\n");
 	printf("Original size: %u bytes\n", original_size);
@@ -399,6 +399,9 @@ DeltaInfo * delta_create(const uint8_t *original_data, uint32_t original_size,
 	}
 
 	// Process original file with sliding window
+	uint32_t progress_interval = original_size / 200; // Report every 0.5%
+	if (progress_interval == 0) progress_interval = 1;
+
 	for (uint32_t i = 0; i < original_size; i++) {
 		rolling_hash_update(rh, original_data[i]);
 
@@ -407,7 +410,16 @@ DeltaInfo * delta_create(const uint8_t *original_data, uint32_t original_size,
 			uint32_t offset = i - window_size + 1;
 			hash_table_insert(ht, hash, offset);
 		}
+
+		// Progress reporting
+		if (i % progress_interval == 0) {
+			uint32_t progress_percent = (uint32_t)((i * 100ULL) / original_size);
+			printf("\rProgress: %u%% (%u/%u bytes)", 
+			       progress_percent, i, original_size);
+			fflush(stdout);
+		}
 	}
+	printf("\n");
 
 	printf("Hash table built with %u entries\n", ht->entry_count);
 	rolling_hash_free(rh);

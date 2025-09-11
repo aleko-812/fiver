@@ -61,7 +61,9 @@ uint32_t rolling_hash_get_hash(RollingHash *rh)
 	if (rh == NULL || rh->bytes_in_window == 0)
 		return 0;
 
-	return rh->a ^ rh->b;
+	// Better hash distribution: combine a and b more effectively
+	// Use bit shifting and addition instead of just XOR
+	return (rh->a << 16) | rh->b;
 }
 
 void rolling_hash_free(RollingHash *rh)

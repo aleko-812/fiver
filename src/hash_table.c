@@ -74,17 +74,9 @@ void hash_table_insert(HashTable *ht, uint32_t hash, uint32_t offset)
 
 	new_entry->hash = hash;
 	new_entry->offset = offset;
-	new_entry->next = NULL;
-
-	HashEntry *current_entry = ht->buckets[bucket_index];
-
-	if (current_entry == NULL) {
-		ht->buckets[bucket_index] = new_entry;
-	} else {
-		while (current_entry->next != NULL)
-			current_entry = current_entry->next;
-		current_entry->next = new_entry;
-	}
+	// Insert at head of chain (O(1) instead of O(n))
+	new_entry->next = ht->buckets[bucket_index];
+	ht->buckets[bucket_index] = new_entry;
 
 	ht->entry_count++;
 }
