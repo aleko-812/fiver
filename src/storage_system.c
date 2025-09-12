@@ -154,6 +154,7 @@ int save_delta(StorageConfig *config, const char *filename, uint32_t version,
 
 	// Create and save metadata
 	FileMetadata metadata;
+	memset(&metadata, 0, sizeof(FileMetadata)); // Initialize to avoid uninitialized bytes
 	strncpy(metadata.filename, filename, sizeof(metadata.filename) - 1);
 	metadata.filename[sizeof(metadata.filename) - 1] = '\0';
 	metadata.version = version;
@@ -221,6 +222,7 @@ DeltaInfo * load_delta(StorageConfig *config, const char *filename, uint32_t ver
 	}
 
 	FileMetadata metadata;
+	memset(&metadata, 0, sizeof(FileMetadata)); // Initialize to avoid uninitialized bytes
 	if (fread(&metadata, sizeof(FileMetadata), 1, meta_file) != 1) {
 		printf("Failed to read metadata\n");
 		fclose(meta_file);

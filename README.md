@@ -20,6 +20,7 @@ A lightweight, efficient file versioning system that tracks changes to text-base
 - **Message Support**: Add descriptive messages to track changes with `--message` flag
 - **Flexible Output**: Restore files to different locations with the `--output` flag
 - **Comprehensive Testing**: 119 automated tests covering all functionality
+- **Memory Leak Detection**: Built-in valgrind integration and static analysis tools
 - **Performance Optimized**: SIMD-accelerated byte comparisons, optimized hash tables, and early termination strategies
 
 ## 🎯 Use Cases & Recommendations
@@ -72,6 +73,8 @@ Fiver is **not recommended** for files with complex internal structure or compre
 1. **Use fiver for**: Source code, configs, documentation, data files
 2. **Test first**: Try fiver on a small sample to verify good compression
 3. **Monitor delta sizes**: Large deltas indicate the file type isn't suitable
+4. **Check memory safety**: Run `make memory-quick` during development
+5. **Validate before release**: Run `make memory-all` before deploying
 
 ## 📋 Requirements
 
@@ -94,6 +97,21 @@ make clean && make
 ### Run Tests
 ```bash
 make test
+```
+
+### Memory Leak Detection
+```bash
+# Quick memory leak test (30 seconds)
+make memory-quick
+
+# Comprehensive memory leak test (5-10 minutes)
+make memory-test
+
+# Static analysis for memory issues
+make static-analysis
+
+# Run all memory leak detection tests
+make memory-all
 ```
 
 ### Install (optional)
@@ -307,12 +325,26 @@ The project includes a comprehensive test suite with **119 automated tests** cov
 - JSON output format validation
 - Error handling and validation
 
-Run tests with:
+### Test Commands
+
 ```bash
+# Run basic functionality tests
 make test
+
+# Quick memory leak detection (30 seconds)
+make memory-quick
+
+# Comprehensive memory leak detection (5-10 minutes)
+make memory-test
+
+# Static analysis for potential memory issues
+make static-analysis
+
+# Run all memory leak detection tests
+make memory-all
 ```
 
-All tests pass successfully, ensuring robust functionality across all features.
+All tests pass successfully, ensuring robust functionality and memory safety across all features.
 
 ## 🔧 Development
 
@@ -337,6 +369,13 @@ All tests pass successfully, ensuring robust functionality across all features.
 - Add comments for complex logic
 - Handle memory allocation errors
 - Validate all inputs
+
+### Memory Management
+
+- All structures are properly initialized to avoid uninitialized bytes
+- Memory leaks are detected using valgrind and static analysis
+- Comprehensive memory leak detection tools are available
+- See [Memory Leak Detection Guide](docs/MEMORY_LEAK_DETECTION.md) for details
 
 ## 📊 Performance
 
@@ -402,6 +441,30 @@ The only requirement is that the license and copyright notice be included in all
 - [ ] File deduplication across multiple files
 - [ ] Branching and merging capabilities
 - [ ] Integration with version control systems
+- [ ] Memory profiling and optimization tools
+- [ ] Automated memory leak detection in CI/CD
+
+## 📚 Quick Reference
+
+### Memory Leak Detection
+```bash
+make memory-quick      # Quick valgrind test (30s)
+make memory-test       # Comprehensive valgrind test (5-10min)
+make static-analysis   # Static analysis tools
+make memory-all        # Run all memory tests
+```
+
+### Development Workflow
+```bash
+make clean && make     # Clean build
+make test             # Run functionality tests
+make memory-quick     # Check for memory leaks
+make format           # Format code
+```
+
+### Documentation
+- [Memory Leak Detection Guide](docs/MEMORY_LEAK_DETECTION.md) - Comprehensive memory testing guide
+- [LICENSE](LICENSE) - MIT License details
 
 ## 📞 Support
 

@@ -32,6 +32,25 @@ test: $(TARGET)
 	@echo "Running automated tests..."
 	./tests/test_track_command.sh
 
+# Run memory leak detection tests
+memory-test: $(TARGET)
+	@echo "Running memory leak detection tests..."
+	./tests/memory_leak_test.sh
+
+# Run quick memory leak test
+memory-quick: $(TARGET)
+	@echo "Running quick memory leak test..."
+	./tests/quick_memory_test.sh
+
+# Run static analysis for memory issues
+static-analysis:
+	@echo "Running static analysis for memory issues..."
+	./tests/static_analysis.sh
+
+# Run all memory leak detection tests
+memory-all: memory-quick memory-test static-analysis
+	@echo "All memory leak detection tests completed!"
+
 # Development target with debug info
 debug: CFLAGS += -DDEBUG -g3
 debug: $(TARGET)
@@ -58,10 +77,14 @@ help:
 	@echo "  install     - Install to /usr/local/bin/"
 	@echo "  uninstall   - Remove from /usr/local/bin/"
 	@echo "  test        - Run basic CLI tests"
+	@echo "  memory-quick- Run quick memory leak test (30s)"
+	@echo "  memory-test - Run comprehensive memory leak detection tests (5-10min)"
+	@echo "  static-analysis - Run static analysis for memory issues"
+	@echo "  memory-all  - Run all memory leak detection tests"
 	@echo "  debug       - Build with debug information"
 	@echo "  release     - Build optimized release version"
 	@echo "  format      - Format source code with uncrustify"
 	@echo "  format-check- Check code formatting without changes"
 	@echo "  help        - Show this help message"
 
-.PHONY: all clean install uninstall test debug release format format-check help
+.PHONY: all clean install uninstall test memory-test memory-quick static-analysis memory-all debug release format format-check help
