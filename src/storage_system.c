@@ -240,7 +240,7 @@ void generate_storage_filename(const char *original_filename, uint32_t version,
  * ```
  */
 void generate_metadata_filename(const char *original_filename, uint32_t version,
-			char *metadata_filename, size_t max_len)
+				char *metadata_filename, size_t max_len)
 {
 	if (original_filename == NULL || metadata_filename == NULL || max_len == 0) {
 		printf("Error: Invalid parameters for metadata filename generation\n");
@@ -887,7 +887,7 @@ uint8_t * apply_delta_alloc(const uint8_t *original_data, uint32_t original_size
  * ```
  */
 uint8_t * reconstruct_file_from_deltas(StorageConfig *config, const char *filename,
-			       uint32_t target_version, uint32_t *final_size)
+				       uint32_t target_version, uint32_t *final_size)
 {
 	if (config == NULL || filename == NULL || final_size == NULL) {
 		printf("Error: Invalid parameters for file reconstruction\n");

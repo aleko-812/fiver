@@ -1,3 +1,32 @@
+/**
+ * @file fiver.c
+ * @brief Main command-line interface for the fiver file versioning system
+ *
+ * This module provides the complete command-line interface for the fiver
+ * file versioning system. It implements a Git-like command structure with
+ * subcommands for tracking, diffing, restoring, and managing file versions
+ * using delta compression.
+ *
+ * The application supports:
+ * - File versioning with delta compression
+ * - Version history tracking and display
+ * - File restoration to specific versions
+ * - Difference analysis between versions
+ * - JSON and table output formats
+ * - Comprehensive error handling and validation
+ *
+ * Command Structure:
+ * - track: Track new versions of files
+ * - diff: Show differences between versions
+ * - restore: Restore files to specific versions
+ * - history: Display version history
+ * - list: List all tracked files
+ * - status: Show current file status
+ *
+ * @author Fiver Development Team
+ * @version 1.0
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -44,9 +73,34 @@ static const Command commands[] = {
 	{ NULL,	     NULL,				     NULL	 } // End marker
 };
 
-// Utility functions
+/**
+ * @brief Prints formatted error messages to stderr
+ *
+ * Outputs error messages with a consistent "fiver: error: " prefix
+ * to stderr. This function provides standardized error reporting
+ * throughout the application.
+ *
+ * @param format printf-style format string. Must not be NULL.
+ * @param ... Variable arguments for the format string.
+ *
+ * @note The function automatically appends a newline character.
+ *
+ * @note This function is thread-safe for output but not for concurrent
+ *       calls with the same format string.
+ *
+ * @example
+ * ```c
+ * print_error("File not found: %s", filename);
+ * // Output: "fiver: error: File not found: example.txt\n"
+ * ```
+ */
 void print_error(const char *format, ...)
 {
+	if (format == NULL) {
+		fprintf(stderr, "fiver: error: Invalid format string\n");
+		return;
+	}
+
 	va_list args;
 
 	va_start(args, format);
@@ -56,8 +110,34 @@ void print_error(const char *format, ...)
 	va_end(args);
 }
 
+/**
+ * @brief Prints formatted success messages to stdout
+ *
+ * Outputs success messages with a checkmark prefix to stdout.
+ * This function provides consistent success reporting throughout
+ * the application.
+ *
+ * @param format printf-style format string. Must not be NULL.
+ * @param ... Variable arguments for the format string.
+ *
+ * @note The function automatically appends a newline character.
+ *
+ * @note This function is thread-safe for output but not for concurrent
+ *       calls with the same format string.
+ *
+ * @example
+ * ```c
+ * print_success("Tracked %s (%zu bytes)", filename, size);
+ * // Output: "✓ Tracked example.txt (1024 bytes)\n"
+ * ```
+ */
 void print_success(const char *format, ...)
 {
+	if (format == NULL) {
+		printf("✓ Success\n");
+		return;
+	}
+
 	va_list args;
 
 	va_start(args, format);
@@ -67,8 +147,34 @@ void print_success(const char *format, ...)
 	va_end(args);
 }
 
+/**
+ * @brief Prints formatted informational messages to stdout
+ *
+ * Outputs informational messages with an info icon prefix to stdout.
+ * This function provides consistent info reporting throughout
+ * the application.
+ *
+ * @param format printf-style format string. Must not be NULL.
+ * @param ... Variable arguments for the format string.
+ *
+ * @note The function automatically appends a newline character.
+ *
+ * @note This function is thread-safe for output but not for concurrent
+ *       calls with the same format string.
+ *
+ * @example
+ * ```c
+ * print_info("Processing file: %s", filename);
+ * // Output: "ℹ Processing file: example.txt\n"
+ * ```
+ */
 void print_info(const char *format, ...)
 {
+	if (format == NULL) {
+		printf("ℹ Information\n");
+		return;
+	}
+
 	va_list args;
 
 	va_start(args, format);
@@ -78,15 +184,55 @@ void print_info(const char *format, ...)
 	va_end(args);
 }
 
-// Help and version functions
+/**
+ * @brief Prints version information to stdout
+ *
+ * Displays the application version and description. This function
+ * is called when the --version or -v option is used.
+ *
+ * @note The function outputs to stdout and does not return any value.
+ *
+ * @example
+ * ```c
+ * print_version();
+ * // Output:
+ * // "fiver 1.0.0\n"
+ * // "A fast file versioning system using delta compression\n"
+ * ```
+ */
 void print_version(void)
 {
 	printf("fiver %s\n", FIVER_VERSION);
 	printf("%s\n", FIVER_DESCRIPTION);
 }
 
+/**
+ * @brief Prints comprehensive usage information to stdout
+ *
+ * Displays detailed usage information including all available commands,
+ * global options, examples, and help instructions. This function is
+ * called when --help or -h is used, or when no command is provided.
+ *
+ * @param program_name Name of the program (usually argv[0]). Must not be NULL.
+ *
+ * @note The function outputs to stdout and does not return any value.
+ *
+ * @note The function dynamically generates command listings from the
+ *       commands array.
+ *
+ * @example
+ * ```c
+ * print_usage("fiver");
+ * // Outputs complete usage information
+ * ```
+ */
 void print_usage(const char *program_name)
 {
+	if (program_name == NULL) {
+		printf("Usage: fiver <command> [options] [arguments]\n\n");
+		program_name = "fiver";
+	}
+
 	printf("Usage: %s <command> [options] [arguments]\n\n", program_name);
 	printf("Commands:\n");
 
@@ -111,8 +257,34 @@ void print_usage(const char *program_name)
 	printf("  %s <command> --help\n", program_name);
 }
 
+/**
+ * @brief Prints detailed help information for a specific command
+ *
+ * Displays command-specific help information including arguments,
+ * options, and examples. This function is called when a command
+ * is followed by --help or -h.
+ *
+ * @param command_name Name of the command to show help for. Must not be NULL.
+ *
+ * @note The function outputs to stdout and does not return any value.
+ *
+ * @note If the command is not found, an error message is printed.
+ *
+ * @note Each command has its own specific help text with examples.
+ *
+ * @example
+ * ```c
+ * print_command_help("track");
+ * // Outputs detailed help for the track command
+ * ```
+ */
 void print_command_help(const char *command_name)
 {
+	if (command_name == NULL) {
+		print_error("Command name is NULL");
+		return;
+	}
+
 	printf("Usage: fiver %s [options] [arguments]\n\n", command_name);
 
 	// Find the command
@@ -200,7 +372,31 @@ static int verbose_flag = 0;
 static int quiet_flag = 0;
 static char *message_flag = NULL;
 
-// Main function
+/**
+ * @brief Main entry point for the fiver application
+ *
+ * Parses command-line arguments, processes global options, and dispatches
+ * commands to their respective handlers. This function implements the
+ * complete command-line interface for the fiver file versioning system.
+ *
+ * @param argc Number of command-line arguments. Must be >= 1.
+ * @param argv Array of command-line argument strings. Must not be NULL.
+ *
+ * @return EXIT_SUCCESS on successful command execution, EXIT_FAILURE on error.
+ *
+ * @note The function processes global options (--verbose, --quiet, --message)
+ *       before dispatching to command handlers.
+ *
+ * @note Command help is handled by print_command_help() for individual commands.
+ *
+ * @note The function validates commands against the commands array.
+ *
+ * @example
+ * ```c
+ * // Command line: fiver track file.txt --message "Update"
+ * int result = main(4, {"fiver", "track", "file.txt", "--message", "Update"});
+ * ```
+ */
 int main(int argc, char *argv[argc + 1])
 {
 	if (argc < 2) {
@@ -208,19 +404,24 @@ int main(int argc, char *argv[argc + 1])
 		return EXIT_FAILURE;
 	}
 
+	if (argv == NULL) {
+		fprintf(stderr, "fiver: error: Invalid argument array\n");
+		return EXIT_FAILURE;
+	}
+
 	// Check for global options first
-	if (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0) {
+	if (argv[1] != NULL && (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0)) {
 		print_usage(argv[0]);
 		return EXIT_SUCCESS;
 	}
 
-	if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-v") == 0) {
+	if (argv[1] != NULL && (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-v") == 0)) {
 		print_version();
 		return EXIT_SUCCESS;
 	}
 
 	// Check for command help
-	if (argc >= 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0)) {
+	if (argc >= 3 && argv[2] != NULL && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0)) {
 		print_command_help(argv[1]);
 		return EXIT_SUCCESS;
 	}
@@ -290,7 +491,30 @@ int main(int argc, char *argv[argc + 1])
 	return result;
 }
 
-// Placeholder command implementations (we'll implement these next)
+/**
+ * @brief Tracks a new version of a file
+ *
+ * Implements the "track" command which creates a new version of a file
+ * using delta compression. This command reads the file, creates a delta
+ * from the previous version (if any), and stores it in the storage system.
+ *
+ * @param argc Number of command arguments. Must be >= 1.
+ * @param argv Array of command arguments. Must not be NULL.
+ *
+ * @return EXIT_SUCCESS on success, EXIT_FAILURE on error.
+ *
+ * @note The function validates file existence, readability, and type.
+ *
+ * @note The function supports the --message option for commit messages.
+ *
+ * @note File data is read entirely into memory for processing.
+ *
+ * @example
+ * ```c
+ * char *args[] = {"file.txt", "--message", "Updated file"};
+ * int result = cmd_track(3, args);
+ * ```
+ */
 int cmd_track(int argc, char *argv[])
 {
 	if (argc < 1) {
@@ -405,6 +629,30 @@ int cmd_track(int argc, char *argv[])
 	return EXIT_SUCCESS;
 }
 
+/**
+ * @brief Shows differences between file versions
+ *
+ * Implements the "diff" command which displays differences between
+ * the current file and a specific version, or between two versions.
+ * This command loads delta information and presents it in various formats.
+ *
+ * @param argc Number of command arguments. Must be >= 1.
+ * @param argv Array of command arguments. Must not be NULL.
+ *
+ * @return EXIT_SUCCESS on success, EXIT_FAILURE on error.
+ *
+ * @note The function supports --version, --json, and --brief options.
+ *
+ * @note If no version is specified, the latest version is used.
+ *
+ * @note The function validates that the specified version exists.
+ *
+ * @example
+ * ```c
+ * char *args[] = {"file.txt", "--version", "2", "--json"};
+ * int result = cmd_diff(4, args);
+ * ```
+ */
 int cmd_diff(int argc, char *argv[])
 {
 	if (argc < 1) {
@@ -504,6 +752,30 @@ int cmd_diff(int argc, char *argv[])
 	return EXIT_SUCCESS;
 }
 
+/**
+ * @brief Restores a file to a specific version
+ *
+ * Implements the "restore" command which reconstructs a file from
+ * its delta chain and writes it to disk. This command can restore
+ * to any previously tracked version.
+ *
+ * @param argc Number of command arguments. Must be >= 1.
+ * @param argv Array of command arguments. Must not be NULL.
+ *
+ * @return EXIT_SUCCESS on success, EXIT_FAILURE on error.
+ *
+ * @note The function supports --version, --output, --force, and --json options.
+ *
+ * @note If no version is specified, the latest version is used.
+ *
+ * @note The function prevents overwriting existing files unless --force is used.
+ *
+ * @example
+ * ```c
+ * char *args[] = {"file.txt", "--version", "2", "--output", "old.txt"};
+ * int result = cmd_restore(5, args);
+ * ```
+ */
 int cmd_restore(int argc, char *argv[])
 {
 	if (argc < 1) {
@@ -663,6 +935,30 @@ int cmd_restore(int argc, char *argv[])
 	return EXIT_SUCCESS;
 }
 
+/**
+ * @brief Shows version history for a file
+ *
+ * Implements the "history" command which displays the complete version
+ * history of a tracked file, including timestamps, operation counts,
+ * delta sizes, and commit messages.
+ *
+ * @param argc Number of command arguments. Must be >= 1.
+ * @param argv Array of command arguments. Must not be NULL.
+ *
+ * @return EXIT_SUCCESS on success, EXIT_FAILURE on error.
+ *
+ * @note The function supports --format and --limit options.
+ *
+ * @note Output formats include table, json, and brief.
+ *
+ * @note The function sorts versions in ascending order for display.
+ *
+ * @example
+ * ```c
+ * char *args[] = {"file.txt", "--format", "json", "--limit", "5"};
+ * int result = cmd_history(5, args);
+ * ```
+ */
 int cmd_history(int argc, char *argv[])
 {
 	if (argc < 1) {
@@ -808,6 +1104,30 @@ int cmd_history(int argc, char *argv[])
 	return EXIT_SUCCESS;
 }
 
+/**
+ * @brief Lists all tracked files
+ *
+ * Implements the "list" command which displays all files currently
+ * being tracked by the fiver system, including version counts and
+ * optionally file sizes.
+ *
+ * @param argc Number of command arguments. Can be 0.
+ * @param argv Array of command arguments. Must not be NULL.
+ *
+ * @return EXIT_SUCCESS on success, EXIT_FAILURE on error.
+ *
+ * @note The function supports --show-sizes and --format options.
+ *
+ * @note The function scans the storage directory for metadata files.
+ *
+ * @note Output formats include table and json.
+ *
+ * @example
+ * ```c
+ * char *args[] = {"--show-sizes", "--format", "json"};
+ * int result = cmd_list(3, args);
+ * ```
+ */
 int cmd_list(int argc, char *argv[])
 {
 	if (verbose_flag)
@@ -978,6 +1298,30 @@ int cmd_list(int argc, char *argv[])
 	return EXIT_SUCCESS;
 }
 
+/**
+ * @brief Shows current status of a tracked file
+ *
+ * Implements the "status" command which displays the current status
+ * of a tracked file, including version information, timestamps,
+ * and comparison with the current file on disk.
+ *
+ * @param argc Number of command arguments. Must be >= 1.
+ * @param argv Array of command arguments. Must not be NULL.
+ *
+ * @return EXIT_SUCCESS on success, EXIT_FAILURE on error.
+ *
+ * @note The function supports --json option for machine-readable output.
+ *
+ * @note The function checks if the current file exists and compares metadata.
+ *
+ * @note Hash comparison is not yet implemented (marked as TODO).
+ *
+ * @example
+ * ```c
+ * char *args[] = {"file.txt", "--json"};
+ * int result = cmd_status(2, args);
+ * ```
+ */
 int cmd_status(int argc, char *argv[])
 {
 	if (argc < 1) {
