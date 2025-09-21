@@ -1,3 +1,28 @@
+/**
+ * @file storage_system.c
+ * @brief File versioning storage system implementation
+ *
+ * This module provides a complete file versioning storage system that manages
+ * delta compression, metadata storage, and file reconstruction. It handles
+ * the persistence layer for the fiver application, storing delta operations
+ * and metadata in a structured format on disk.
+ *
+ * The storage system supports:
+ * - Delta compression storage and retrieval
+ * - Metadata management with timestamps and checksums
+ * - File reconstruction from delta chains
+ * - Version tracking and management
+ * - Safe filename generation and path handling
+ *
+ * Storage Format:
+ * - Delta files: Binary format with operation headers and data
+ * - Metadata files: Binary FileMetadata structure with file information
+ * - Directory structure: Organized by filename with version suffixes
+ *
+ * @author Fiver Development Team
+ * @version 1.0
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,7 +37,31 @@ DeltaInfo * delta_create(const uint8_t *original_data, uint32_t original_size, c
 void delta_free(DeltaInfo *delta);
 
 /**
- * Initialize storage system with default configuration
+ * @brief Initializes the storage system with default configuration
+ *
+ * Creates and initializes a new StorageConfig structure with default settings
+ * and ensures the storage directory exists. This function sets up the storage
+ * system for file versioning operations.
+ *
+ * @param storage_dir Path to the storage directory. If NULL, uses "./blob_diff_storage".
+ *                    The directory will be created if it doesn't exist.
+ *
+ * @return Pointer to the newly created StorageConfig on success, NULL on failure.
+ *         The caller is responsible for freeing the config with storage_free().
+ *
+ * @note The function creates the storage directory with 0755 permissions if needed.
+ *
+ * @note Default configuration:
+ *       - max_versions: 100
+ *       - compression_enabled: 0 (disabled)
+ *
+ * @example
+ * ```c
+ * StorageConfig *config = storage_init("/path/to/storage");
+ * if (config == NULL) {
+ *     // Handle initialization failure
+ * }
+ * ```
  */
 StorageConfig * storage_init(const char *storage_dir)
 {
@@ -47,7 +96,23 @@ StorageConfig * storage_init(const char *storage_dir)
 }
 
 /**
- * Free storage configuration
+ * @brief Frees memory associated with storage configuration
+ *
+ * Safely frees all memory allocated for the StorageConfig structure.
+ * This function handles NULL pointers gracefully.
+ *
+ * @param config Pointer to the StorageConfig to free. Safe to pass NULL.
+ *
+ * @note After calling this function, the config pointer becomes invalid
+ *       and should not be dereferenced.
+ *
+ * @example
+ * ```c
+ * StorageConfig *config = storage_init("/path/to/storage");
+ * // ... use config ...
+ * storage_free(config);  // Free memory
+ * // config is now invalid
+ * ```
  */
 void storage_free(StorageConfig *config)
 {
@@ -56,10 +121,40 @@ void storage_free(StorageConfig *config)
 }
 
 /**
- * Calculate simple checksum for data integrity
+ * @brief Calculates a simple checksum for data integrity verification
+ *
+ * Computes a basic checksum by summing all bytes in the data buffer.
+ * This provides a simple integrity check for stored files and deltas.
+ *
+ * @param data Pointer to the data buffer to checksum. Must not be NULL.
+ * @param size Number of bytes to process. Must be > 0.
+ * @param checksum Output buffer for the checksum string. Must be at least 64 bytes.
+ *                 The checksum is formatted as an 8-character hexadecimal string.
+ *
+ * @note This is a simple checksum algorithm suitable for basic integrity checking.
+ *       For production use, consider implementing CRC32 or SHA-256.
+ *
+ * @note The checksum string is null-terminated.
+ *
+ * @example
+ * ```c
+ * char checksum[64];
+ * calculate_checksum(file_data, file_size, checksum);
+ * printf("Checksum: %s\n", checksum);
+ * ```
  */
 void calculate_checksum(const uint8_t *data, uint32_t size, char *checksum)
 {
+	if (data == NULL || checksum == NULL) {
+		printf("Error: Invalid parameters for checksum calculation\n");
+		return;
+	}
+
+	if (size == 0) {
+		strcpy(checksum, "00000000");
+		return;
+	}
+
 	uint32_t sum = 0;
 
 	for (uint32_t i = 0; i < size; i++)
@@ -68,11 +163,43 @@ void calculate_checksum(const uint8_t *data, uint32_t size, char *checksum)
 }
 
 /**
- * Generate storage filename for a specific version
+ * @brief Generates a safe storage filename for a specific version
+ *
+ * Creates a filesystem-safe filename by replacing problematic characters
+ * and appending the version number. This ensures compatibility across
+ * different operating systems and filesystems.
+ *
+ * @param original_filename The original filename to convert. Must not be NULL.
+ * @param version Version number to append. Must be > 0.
+ * @param storage_filename Output buffer for the generated filename. Must not be NULL.
+ * @param max_len Maximum length of the output buffer. Must be > 0.
+ *
+ * @note Problematic characters (/, \, :) are replaced with underscores.
+ *
+ * @note The output filename format is: "safe_name_v{version}.delta"
+ *
+ * @note The function ensures the output string is null-terminated.
+ *
+ * @example
+ * ```c
+ * char filename[256];
+ * generate_storage_filename("my/file.txt", 5, filename, sizeof(filename));
+ * // Result: "my_file.txt_v5.delta"
+ * ```
  */
 void generate_storage_filename(const char *original_filename, uint32_t version,
 			       char *storage_filename, size_t max_len)
 {
+	if (original_filename == NULL || storage_filename == NULL || max_len == 0) {
+		printf("Error: Invalid parameters for filename generation\n");
+		return;
+	}
+
+	if (version == 0) {
+		printf("Error: Version must be greater than 0\n");
+		return;
+	}
+
 	// Create a safe filename by replacing problematic characters
 	char safe_name[256];
 
@@ -88,11 +215,43 @@ void generate_storage_filename(const char *original_filename, uint32_t version,
 }
 
 /**
- * Generate metadata filename
+ * @brief Generates a safe metadata filename for a specific version
+ *
+ * Creates a filesystem-safe metadata filename by replacing problematic
+ * characters and appending the version number. This ensures compatibility
+ * across different operating systems and filesystems.
+ *
+ * @param original_filename The original filename to convert. Must not be NULL.
+ * @param version Version number to append. Must be > 0.
+ * @param metadata_filename Output buffer for the generated filename. Must not be NULL.
+ * @param max_len Maximum length of the output buffer. Must be > 0.
+ *
+ * @note Problematic characters (/, \, :) are replaced with underscores.
+ *
+ * @note The output filename format is: "safe_name_v{version}.meta"
+ *
+ * @note The function ensures the output string is null-terminated.
+ *
+ * @example
+ * ```c
+ * char filename[256];
+ * generate_metadata_filename("my/file.txt", 5, filename, sizeof(filename));
+ * // Result: "my_file.txt_v5.meta"
+ * ```
  */
 void generate_metadata_filename(const char *original_filename, uint32_t version,
-				char *metadata_filename, size_t max_len)
+			char *metadata_filename, size_t max_len)
 {
+	if (original_filename == NULL || metadata_filename == NULL || max_len == 0) {
+		printf("Error: Invalid parameters for metadata filename generation\n");
+		return;
+	}
+
+	if (version == 0) {
+		printf("Error: Version must be greater than 0\n");
+		return;
+	}
+
 	char safe_name[256];
 
 	strncpy(safe_name, original_filename, sizeof(safe_name) - 1);
@@ -106,13 +265,52 @@ void generate_metadata_filename(const char *original_filename, uint32_t version,
 }
 
 /**
- * Save delta to storage
+ * @brief Saves a delta and its metadata to persistent storage
+ *
+ * Writes delta operations and associated metadata to disk in a structured
+ * binary format. This function handles both the delta data and metadata
+ * files, ensuring atomicity by cleaning up on failure.
+ *
+ * @param config Storage configuration. Must not be NULL.
+ * @param filename Original filename for versioning. Must not be NULL.
+ * @param version Version number to save. Must be > 0.
+ * @param delta Delta information to save. Must not be NULL.
+ * @param original_data Original file data for checksum calculation. Can be NULL.
+ * @param message Optional commit message. Can be NULL.
+ *
+ * @return EXIT_SUCCESS on success, -1 on failure.
+ *
+ * @note The function creates two files: .delta (operations) and .meta (metadata).
+ *
+ * @note On failure, any partially created files are cleaned up.
+ *
+ * @note The function calculates a checksum of the original data for integrity.
+ *
+ * @example
+ * ```c
+ * int result = save_delta(config, "file.txt", 2, delta, orig_data, "Updated file");
+ * if (result != EXIT_SUCCESS) {
+ *     // Handle save failure
+ * }
+ * ```
  */
 int save_delta(StorageConfig *config, const char *filename, uint32_t version,
 	       const DeltaInfo *delta, const uint8_t *original_data, const char *message)
 {
-	if (config == NULL || filename == NULL || delta == NULL)
+	if (config == NULL || filename == NULL || delta == NULL) {
+		printf("Error: Invalid parameters for delta save\n");
 		return -1;
+	}
+
+	if (version == 0) {
+		printf("Error: Version must be greater than 0\n");
+		return -1;
+	}
+
+	if (delta->operation_count == 0) {
+		printf("Error: Delta has no operations\n");
+		return -1;
+	}
 
 	char storage_filename[512];
 	char metadata_filename[512];
@@ -192,12 +390,45 @@ int save_delta(StorageConfig *config, const char *filename, uint32_t version,
 }
 
 /**
- * Load delta from storage
+ * @brief Loads a delta and its metadata from persistent storage
+ *
+ * Reads delta operations and metadata from disk, reconstructing the
+ * DeltaInfo structure. This function handles both binary delta data
+ * and metadata files.
+ *
+ * @param config Storage configuration. Must not be NULL.
+ * @param filename Original filename to load. Must not be NULL.
+ * @param version Version number to load. Must be > 0.
+ *
+ * @return Pointer to DeltaInfo structure on success, NULL on failure.
+ *         The caller is responsible for freeing the delta with delta_free().
+ *
+ * @note The function loads both .delta and .meta files for the specified version.
+ *
+ * @note Memory allocation failures are handled gracefully and return NULL.
+ *
+ * @note The function calculates the new_size from operations during loading.
+ *
+ * @example
+ * ```c
+ * DeltaInfo *delta = load_delta(config, "file.txt", 2);
+ * if (delta != NULL) {
+ *     // Use delta...
+ *     delta_free(delta);
+ * }
+ * ```
  */
 DeltaInfo * load_delta(StorageConfig *config, const char *filename, uint32_t version)
 {
-	if (config == NULL || filename == NULL)
+	if (config == NULL || filename == NULL) {
+		printf("Error: Invalid parameters for delta load\n");
 		return NULL;
+	}
+
+	if (version == 0) {
+		printf("Error: Version must be greater than 0\n");
+		return NULL;
+	}
 
 	char storage_filename[512];
 	char metadata_filename[512];
@@ -336,13 +567,45 @@ DeltaInfo * load_delta(StorageConfig *config, const char *filename, uint32_t ver
 }
 
 /**
- * Get list of available versions for a file
+ * @brief Retrieves a list of available versions for a specific file
+ *
+ * Scans the storage directory for metadata files belonging to the specified
+ * filename and returns a list of available version numbers. This function
+ * provides version discovery capabilities for the storage system.
+ *
+ * @param config Storage configuration. Must not be NULL.
+ * @param filename Original filename to scan for. Must not be NULL.
+ * @param versions Output array for version numbers. Must not be NULL.
+ * @param max_versions Maximum number of versions to return. Must be > 0.
+ *
+ * @return Number of versions found on success, -1 on failure.
+ *
+ * @note This is a simplified implementation that checks versions 1-100.
+ *       A production system would use glob() or readdir() for efficiency.
+ *
+ * @note The function only checks for the existence of metadata files.
+ *
+ * @example
+ * ```c
+ * uint32_t versions[100];
+ * int count = get_file_versions(config, "file.txt", versions, 100);
+ * if (count > 0) {
+ *     printf("Found %d versions\n", count);
+ * }
+ * ```
  */
 int get_file_versions(StorageConfig *config, const char *filename,
 		      uint32_t *versions, uint32_t max_versions)
 {
-	if (config == NULL || filename == NULL || versions == NULL)
+	if (config == NULL || filename == NULL || versions == NULL) {
+		printf("Error: Invalid parameters for version listing\n");
 		return -1;
+	}
+
+	if (max_versions == 0) {
+		printf("Error: max_versions must be greater than 0\n");
+		return -1;
+	}
 
 	uint32_t version_count = 0;
 
@@ -368,12 +631,41 @@ int get_file_versions(StorageConfig *config, const char *filename,
 }
 
 /**
- * Delete a specific version
+ * @brief Deletes a specific version of a file from storage
+ *
+ * Removes both the delta file and metadata file for the specified version.
+ * This function provides version cleanup capabilities for the storage system.
+ *
+ * @param config Storage configuration. Must not be NULL.
+ * @param filename Original filename to delete. Must not be NULL.
+ * @param version Version number to delete. Must be > 0.
+ *
+ * @return EXIT_SUCCESS on success, -1 on failure.
+ *
+ * @note The function attempts to delete both .delta and .meta files.
+ *
+ * @note Partial failures are reported but don't prevent the function from
+ *       attempting to delete both files.
+ *
+ * @example
+ * ```c
+ * int result = delete_version(config, "file.txt", 3);
+ * if (result == EXIT_SUCCESS) {
+ *     printf("Version 3 deleted\n");
+ * }
+ * ```
  */
 int delete_version(StorageConfig *config, const char *filename, uint32_t version)
 {
-	if (config == NULL || filename == NULL)
+	if (config == NULL || filename == NULL) {
+		printf("Error: Invalid parameters for version deletion\n");
 		return -1;
+	}
+
+	if (version == 0) {
+		printf("Error: Version must be greater than 0\n");
+		return -1;
+	}
 
 	char storage_filename[512];
 	char metadata_filename[512];
@@ -407,13 +699,47 @@ int delete_version(StorageConfig *config, const char *filename, uint32_t version
 }
 
 /**
- * Apply delta to reconstruct file
+ * @brief Applies delta operations to reconstruct a file
+ *
+ * Processes delta operations in sequence to reconstruct the target file
+ * from the original file data. This function handles COPY, INSERT, and
+ * REPLACE operations with proper bounds checking.
+ *
+ * @param delta Delta information containing operations. Must not be NULL.
+ * @param original_data Original file data for COPY operations. Can be NULL for first version.
+ * @param output_buffer Buffer to write reconstructed data. Must not be NULL.
+ * @param output_buffer_size Size of the output buffer. Must be >= delta->new_size.
+ *
+ * @return Number of bytes written on success, -1 on failure.
+ *
+ * @note The function performs bounds checking to prevent buffer overflows.
+ *
+ * @note For first versions (original_data == NULL), only INSERT operations are allowed.
+ *
+ * @note The function processes operations in the order they appear in the delta.
+ *
+ * @example
+ * ```c
+ * uint8_t buffer[1024];
+ * int size = apply_delta(delta, orig_data, buffer, sizeof(buffer));
+ * if (size > 0) {
+ *     // File reconstructed successfully
+ * }
+ * ```
  */
 int apply_delta(const DeltaInfo *delta, const uint8_t *original_data,
 		uint8_t *output_buffer, uint32_t output_buffer_size)
 {
-	if (delta == NULL || output_buffer == NULL)
+	if (delta == NULL || output_buffer == NULL) {
+		printf("Error: Invalid parameters for delta application\n");
 		return -1;
+	}
+
+	if (output_buffer_size < delta->new_size) {
+		printf("Error: Output buffer too small (%u < %u)\n", output_buffer_size, delta->new_size);
+		return -1;
+	}
+
 	// original_data can be NULL for first version (where original_size = 0)
 
 	uint32_t output_pos = 0;
@@ -471,15 +797,45 @@ int apply_delta(const DeltaInfo *delta, const uint8_t *original_data,
 }
 
 /**
- * Apply delta and allocate result buffer
- * This is a convenience function that allocates the output buffer and returns the result
+ * @brief Applies delta operations and allocates the result buffer
+ *
+ * Convenience function that combines delta application with buffer allocation.
+ * This function automatically allocates the correct size buffer and applies
+ * the delta operations, returning the reconstructed data.
+ *
+ * @param original_data Original file data for COPY operations. Can be NULL for first version.
+ * @param original_size Size of the original data. Not used in current implementation.
+ * @param delta Delta information containing operations. Must not be NULL.
+ *
+ * @return Pointer to allocated buffer containing reconstructed data on success,
+ *         NULL on failure. The caller is responsible for freeing the buffer.
+ *
+ * @note The function allocates exactly delta->new_size bytes for the output.
+ *
+ * @note Memory allocation failures are handled gracefully and return NULL.
+ *
+ * @example
+ * ```c
+ * uint8_t *reconstructed = apply_delta_alloc(orig_data, orig_size, delta);
+ * if (reconstructed != NULL) {
+ *     // Use reconstructed data...
+ *     free(reconstructed);
+ * }
+ * ```
  */
 uint8_t * apply_delta_alloc(const uint8_t *original_data, uint32_t original_size,
 			    const DeltaInfo *delta)
 {
 	(void)original_size; // Parameter not used in this implementation
-	if (delta == NULL)
+	if (delta == NULL) {
+		printf("Error: Delta is NULL\n");
 		return NULL;
+	}
+
+	if (delta->new_size == 0) {
+		printf("Error: Delta has zero new size\n");
+		return NULL;
+	}
 
 	// Allocate output buffer
 	uint8_t *output_buffer = malloc(delta->new_size);
@@ -500,16 +856,48 @@ uint8_t * apply_delta_alloc(const uint8_t *original_data, uint32_t original_size
 }
 
 /**
- * Reconstruct a file from its delta chain
- * This function reconstructs a specific version by applying all deltas from version 1 up to the target version
+ * @brief Reconstructs a file from its complete delta chain
+ *
+ * Reconstructs a specific version by loading and applying all deltas from
+ * version 1 up to the target version. This function handles the complete
+ * reconstruction process for any version in the chain.
+ *
+ * @param config Storage configuration. Must not be NULL.
+ * @param filename Original filename to reconstruct. Must not be NULL.
+ * @param target_version Target version to reconstruct. Must be > 0.
+ * @param final_size Output parameter for the final file size. Must not be NULL.
+ *
+ * @return Pointer to allocated buffer containing reconstructed file on success,
+ *         NULL on failure. The caller is responsible for freeing the buffer.
+ *
+ * @note The function loads version 1 as the base and applies subsequent deltas.
+ *
+ * @note Memory allocation failures are handled gracefully and return NULL.
+ *
+ * @note The function frees intermediate data to prevent memory leaks.
+ *
+ * @example
+ * ```c
+ * uint32_t size;
+ * uint8_t *file = reconstruct_file_from_deltas(config, "file.txt", 5, &size);
+ * if (file != NULL) {
+ *     // Use reconstructed file...
+ *     free(file);
+ * }
+ * ```
  */
 uint8_t * reconstruct_file_from_deltas(StorageConfig *config, const char *filename,
-				       uint32_t target_version, uint32_t *final_size)
+			       uint32_t target_version, uint32_t *final_size)
 {
-	if (config == NULL || filename == NULL || final_size == NULL)
+	if (config == NULL || filename == NULL || final_size == NULL) {
+		printf("Error: Invalid parameters for file reconstruction\n");
 		return NULL;
-	if (target_version == 0)
+	}
+
+	if (target_version == 0) {
+		printf("Error: Target version must be greater than 0\n");
 		return NULL;
+	}
 
 	// Start with version 1 (which is a full file)
 	uint8_t *current_data = NULL;
@@ -568,13 +956,46 @@ uint8_t * reconstruct_file_from_deltas(StorageConfig *config, const char *filena
 }
 
 /**
- * Track a new version of a file
+ * @brief Tracks a new version of a file in the storage system
+ *
+ * Creates and stores a new version of a file by generating a delta from
+ * the previous version and saving it to persistent storage. This is the
+ * main entry point for file versioning operations.
+ *
+ * @param config Storage configuration. Must not be NULL.
+ * @param filename Original filename to track. Must not be NULL.
+ * @param file_data New file data to store. Must not be NULL.
+ * @param file_size Size of the new file data. Must be > 0.
+ * @param message Optional commit message. Can be NULL.
+ *
+ * @return New version number on success, -1 on failure.
+ *
+ * @note For the first version, creates a delta containing the entire file.
+ *
+ * @note The function automatically determines the next version number.
+ *
+ * @note Memory allocation failures are handled gracefully and return -1.
+ *
+ * @example
+ * ```c
+ * int version = track_file_version(config, "file.txt", data, size, "Updated file");
+ * if (version > 0) {
+ *     printf("Tracked as version %d\n", version);
+ * }
+ * ```
  */
 int track_file_version(StorageConfig *config, const char *filename,
 		       const uint8_t *file_data, uint32_t file_size, const char *message)
 {
-	if (config == NULL || filename == NULL || file_data == NULL)
+	if (config == NULL || filename == NULL || file_data == NULL) {
+		printf("Error: Invalid parameters for file tracking\n");
 		return -1;
+	}
+
+	if (file_size == 0) {
+		printf("Error: File size must be greater than 0\n");
+		return -1;
+	}
 
 	// Get current version number
 	uint32_t versions[100];
