@@ -549,15 +549,14 @@ DeltaInfo * delta_create(const uint8_t *original_data, uint32_t original_size,
 	// If we have a large amount of identical content, use chunk-based approach
 	// Also trigger for small changes regardless of percentage
 	uint32_t change_size = (new_size > original_size) ? (new_size - original_size) : (original_size - new_size);
-	if (total_identical_bytes > original_size * 0.8 || // 80% identical
-	    (change_size < 10000 && change_size < original_size * 0.01)) { // Small changes (<1% of file)
-		if (change_size < 10000 && change_size < original_size * 0.01) {
+	int change_size_less_than_1_percent = change_size < original_size * 0.01;
+	if (total_identical_bytes > original_size * 0.8 || change_size_less_than_1_percent) {
+		if (change_size_less_than_1_percent)
 			printf("Detected small change (%u bytes, %.3f%% of file) - using chunk-based approach\n",
 			       change_size, (change_size * 100.0) / original_size);
-		} else {
+		else
 			printf("Detected large matching chunks (%.1f%% identical) - using chunk-based approach\n",
 			       (total_identical_bytes * 100.0) / original_size);
-		}
 
 		DeltaInfo *delta = malloc(sizeof(DeltaInfo));
 		if (delta == NULL) return NULL;
