@@ -4,6 +4,36 @@
 #include <stdint.h>
 #include "delta_structures.h"
 
+/**
+ * @file delta_algorithm.c
+ * @brief Delta compression algorithm implementation for file versioning
+ *
+ * This module implements a sophisticated three-tier delta compression algorithm
+ * that automatically chooses the best compression strategy based on the nature
+ * of changes between files. It supports simple end-of-file changes, chunk-based
+ * changes, and complex rolling hash-based pattern matching.
+ *
+ * The algorithm uses:
+ * - Simple approach: For small end-of-file changes (95%+ identical)
+ * - Chunk-based approach: For small changes anywhere in the file (<1% of file)
+ * - Rolling hash algorithm: For complex changes with rsync-like pattern matching
+ *
+ * @author Fiver Development Team
+ * @version 1.0
+ */
+
+/**
+ * @brief Comparison function for sorting matches by new file offset
+ *
+ * Used by qsort() to sort matches in ascending order by their position in the
+ * new file. This ensures that delta operations are processed in the correct
+ * sequence when creating the final delta.
+ *
+ * @param a Pointer to first Match structure
+ * @param b Pointer to second Match structure
+ *
+ * @return Negative value if a < b, positive if a > b, 0 if equal
+ */
 // Comparison function for qsort
 static int compare_matches(const void *a, const void *b)
 {
@@ -35,7 +65,27 @@ void hash_table_free(HashTable *ht);
 // Match and DeltaState are now defined in delta_structures.h
 
 /**
- * Initialize delta state
+ * @brief Creates a new delta state for tracking matches during delta creation
+ *
+ * Allocates and initializes a new DeltaState structure with the specified
+ * initial capacity for storing matches. The delta state is used to collect
+ * and manage matches found during the pattern matching phase of delta creation.
+ *
+ * @param initial_capacity Initial capacity for the matches array. Must be > 0.
+ *                        The array will be automatically resized as needed.
+ *
+ * @return Pointer to the newly created DeltaState on success, NULL on failure.
+ *         The caller is responsible for freeing the state with delta_state_free().
+ *
+ * @note Memory allocation failures are handled gracefully and return NULL.
+ *
+ * @example
+ * ```c
+ * DeltaState *state = delta_state_new(100);
+ * if (state == NULL) {
+ *     // Handle allocation failure
+ * }
+ * ```
  */
 DeltaState * delta_state_new(uint32_t initial_capacity)
 {
@@ -59,7 +109,32 @@ DeltaState * delta_state_new(uint32_t initial_capacity)
 }
 
 /**
- * Add a match to the delta state
+ * @brief Adds a match to the delta state
+ *
+ * Adds a new match to the delta state's matches array. The function automatically
+ * resizes the matches array if it reaches capacity. Matches represent identical
+ * sequences of bytes found in both the original and new files.
+ *
+ * @param state Pointer to the delta state. Must not be NULL.
+ * @param original_offset Offset in the original file where the match starts
+ * @param new_offset Offset in the new file where the match starts
+ * @param length Length of the matching sequence in bytes
+ *
+ * @return EXIT_SUCCESS on success, -1 on failure (NULL state or memory allocation failure)
+ *
+ * @note The function automatically doubles the capacity when the matches array is full.
+ *
+ * @note Matches are stored in the order they are added and will be sorted later
+ *       by new_offset when creating delta operations.
+ *
+ * @example
+ * ```c
+ * DeltaState *state = delta_state_new(100);
+ * int result = delta_state_add_match(state, 1024, 2048, 64);
+ * if (result != EXIT_SUCCESS) {
+ *     // Handle error
+ * }
+ * ```
  */
 int delta_state_add_match(DeltaState *state, uint32_t original_offset,
 			  uint32_t new_offset, uint32_t length)
@@ -88,7 +163,24 @@ int delta_state_add_match(DeltaState *state, uint32_t original_offset,
 }
 
 /**
- * Free delta state
+ * @brief Frees all memory associated with the delta state
+ *
+ * Recursively frees all memory allocated for the delta state structure,
+ * including the matches array. This function safely handles NULL pointers
+ * and ensures no memory leaks occur.
+ *
+ * @param state Pointer to the delta state to free. Safe to pass NULL.
+ *
+ * @note After calling this function, the delta state pointer becomes invalid
+ *       and should not be dereferenced.
+ *
+ * @example
+ * ```c
+ * DeltaState *state = delta_state_new(100);
+ * // ... use delta state ...
+ * delta_state_free(state);  // Free all memory
+ * // state is now invalid and should not be used
+ * ```
  */
 void delta_state_free(DeltaState *state)
 {
@@ -99,7 +191,33 @@ void delta_state_free(DeltaState *state)
 }
 
 /**
- * Verify that a match is actually valid by comparing bytes
+ * @brief Verifies that a match is actually valid by comparing bytes
+ *
+ * Performs a byte-by-byte comparison to verify that the proposed match
+ * is actually valid. This is used as a safety check to ensure that hash
+ * collisions don't result in false matches.
+ *
+ * @param original_data Pointer to the original file data
+ * @param original_size Size of the original file in bytes
+ * @param new_data Pointer to the new file data
+ * @param new_size Size of the new file in bytes
+ * @param original_offset Offset in original file where match should start
+ * @param new_offset Offset in new file where match should start
+ * @param length Length of the proposed match in bytes
+ *
+ * @return 1 if the match is valid (bytes are identical), 0 if invalid or out of bounds
+ *
+ * @note This function performs bounds checking to prevent buffer overflows.
+ *
+ * @note The function uses memcmp() for efficient byte comparison.
+ *
+ * @example
+ * ```c
+ * int is_valid = verify_match(orig_data, orig_size, new_data, new_size, 1024, 2048, 64);
+ * if (is_valid) {
+ *     // Match is confirmed valid
+ * }
+ * ```
  */
 int verify_match(const uint8_t *original_data, uint32_t original_size,
 		 const uint8_t *new_data, uint32_t new_size,
@@ -454,7 +572,40 @@ DeltaInfo * create_delta_operations(const uint8_t *original_data, uint32_t origi
 }
 
 /**
- * Main delta creation function
+ * @brief Main delta creation function implementing three-tier compression strategy
+ *
+ * Creates a delta between two files using a sophisticated three-tier approach
+ * that automatically chooses the best compression strategy based on the nature
+ * of changes. This is the primary entry point for delta compression.
+ *
+ * The algorithm uses three strategies:
+ * 1. Simple approach: For small end-of-file changes (95%+ identical)
+ * 2. Chunk-based approach: For small changes anywhere in the file (<1% of file)
+ * 3. Rolling hash algorithm: For complex changes with rsync-like pattern matching
+ *
+ * @param original_data Pointer to the original file data
+ * @param original_size Size of the original file in bytes
+ * @param new_data Pointer to the new file data
+ * @param new_size Size of the new file in bytes
+ *
+ * @return Pointer to DeltaInfo structure containing the delta operations on success,
+ *         NULL on failure. The caller is responsible for freeing the delta with delta_free().
+ *
+ * @note The function automatically chooses the most efficient compression strategy.
+ *
+ * @note For large files (>50MB), the algorithm uses more aggressive optimization
+ *       to prevent excessive memory usage and processing time.
+ *
+ * @note The function includes progress reporting and detailed logging for monitoring.
+ *
+ * @example
+ * ```c
+ * DeltaInfo *delta = delta_create(orig_data, orig_size, new_data, new_size);
+ * if (delta != NULL) {
+ *     // Use delta...
+ *     delta_free(delta);
+ * }
+ * ```
  */
 DeltaInfo * delta_create(const uint8_t *original_data, uint32_t original_size,
 			 const uint8_t *new_data, uint32_t new_size)
@@ -889,7 +1040,26 @@ DeltaInfo * delta_create(const uint8_t *original_data, uint32_t original_size,
 }
 
 /**
- * Free delta info and all its operations
+ * @brief Frees all memory associated with a delta and its operations
+ *
+ * Recursively frees all memory allocated for the DeltaInfo structure,
+ * including all delta operations and their associated data. This function
+ * safely handles NULL pointers and ensures no memory leaks occur.
+ *
+ * @param delta Pointer to the delta to free. Safe to pass NULL.
+ *
+ * @note This function frees all operation data arrays and the delta structure itself.
+ *
+ * @note After calling this function, the delta pointer becomes invalid
+ *       and should not be dereferenced.
+ *
+ * @example
+ * ```c
+ * DeltaInfo *delta = delta_create(orig_data, orig_size, new_data, new_size);
+ * // ... use delta ...
+ * delta_free(delta);  // Free all memory
+ * // delta is now invalid and should not be used
+ * ```
  */
 void delta_free(DeltaInfo *delta)
 {
@@ -905,7 +1075,23 @@ void delta_free(DeltaInfo *delta)
 }
 
 /**
- * Print delta information for debugging
+ * @brief Prints detailed delta information for debugging and analysis
+ *
+ * Outputs comprehensive information about a delta including operation counts,
+ * sizes, compression ratios, and detailed operation breakdowns. This function
+ * is primarily used for debugging and performance analysis.
+ *
+ * @param delta Pointer to the delta to analyze. Must not be NULL.
+ *
+ * @note This function outputs to stdout and is intended for debugging purposes.
+ *
+ * @note The function safely handles NULL deltas by printing an appropriate message.
+ *
+ * @example
+ * ```c
+ * DeltaInfo *delta = delta_create(orig_data, orig_size, new_data, new_size);
+ * print_delta_info(delta);  // Debug output
+ * ```
  */
 void print_delta_info(const DeltaInfo *delta)
 {
