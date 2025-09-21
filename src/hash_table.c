@@ -206,4 +206,3 @@ void hash_table_free(HashTable *ht)
 	free(ht->buckets);
 	free(ht);
 }
-

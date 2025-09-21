@@ -24,7 +24,7 @@ static Match * match_alloc(void)
 // Forward declarations
 RollingHash * rolling_hash_new(uint32_t window_size);
 void rolling_hash_update(RollingHash *rh, uint8_t byte);
-uint32_t rolling_hash_get_hash(RollingHash *rh);
+uint32_t rolling_hash_get(RollingHash *rh);
 void rolling_hash_free(RollingHash *rh);
 
 HashTable * hash_table_new(uint32_t bucket_count);
@@ -137,7 +137,7 @@ Match * find_best_match_optimized(const uint8_t *original_data, uint32_t origina
 		rolling_hash_update(rh, new_data[new_pos + window_size - 1]);
 	}
 
-	uint32_t hash = rolling_hash_get_hash(rh);
+	uint32_t hash = rolling_hash_get(rh);
 
 	// Look for matches in original file
 	HashEntry *match_entry = hash_table_find((HashTable *)ht, hash);
@@ -233,7 +233,7 @@ Match * find_best_match(const uint8_t *original_data, uint32_t original_size,
 	for (uint32_t i = 0; i < window_size; i++)
 		rolling_hash_update(rh, new_data[new_pos + i]);
 
-	uint32_t hash = rolling_hash_get_hash(rh);
+	uint32_t hash = rolling_hash_get(rh);
 
 	// Look for matches in original file
 	HashEntry *match_entry = hash_table_find((HashTable *)ht, hash);
@@ -655,7 +655,7 @@ DeltaInfo * delta_create(const uint8_t *original_data, uint32_t original_size,
 		rolling_hash_update(rh, original_data[i]);
 
 		if (i >= window_size - 1) {
-			uint32_t hash = rolling_hash_get_hash(rh);
+			uint32_t hash = rolling_hash_get(rh);
 			uint32_t offset = i - window_size + 1;
 			hash_table_insert(ht, hash, offset);
 		}
