@@ -1035,7 +1035,7 @@ int cmd_history(int argc, char *argv[])
 	if (strcmp(format, "json") == 0) {
 		printf("{\n  \"file\": \"%s\",\n  \"versions\": [\n", filename);
 		int first = 1;
-		for (int idx = start_index; idx < count; idx++) {
+		for (int idx = count - 1; idx >= start_index; idx--) {
 			uint32_t v = versions[idx];
 			// Read metadata
 			char metadata_filename[1024];
@@ -1057,7 +1057,7 @@ int cmd_history(int argc, char *argv[])
 		}
 		printf("\n  ]\n}\n");
 	} else if (strcmp(format, "brief") == 0) {
-		for (int idx = start_index; idx < count; idx++) {
+		for (int idx = count - 1; idx >= start_index; idx--) {
 			uint32_t v = versions[idx];
 			char metadata_filename[1024];
 			snprintf(metadata_filename, sizeof(metadata_filename), "%s/%s_v%u.meta",
@@ -1078,7 +1078,7 @@ int cmd_history(int argc, char *argv[])
 		printf("Version  Timestamp            Ops  Delta  Message\n");
 		printf("-------  -------------------  ----  -----  -------\n");
 		char timebuf[64];
-		for (int idx = start_index; idx < count; idx++) {
+		for (int idx = count - 1; idx >= start_index; idx--) {
 			uint32_t v = versions[idx];
 			char metadata_filename[1024];
 			snprintf(metadata_filename, sizeof(metadata_filename), "%s/%s_v%u.meta",
